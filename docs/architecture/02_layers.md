@@ -116,14 +116,21 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
   → `LeakageReport`. `multi_test` runner tarafından garanti (tuner test'i görmez).
 - `RunConfig.validation` (`ValidationConfig`).
 
-## scoring/  (ADR 0014 — dürüst seçim)
-- **Girdi:** `[ValidationReport]` (OOF) + `RunConfig` + (opsiyonel) demand-class
-- **Çıktı:** `ScoreBoard` + `SelectionResult`
-- Alt: `metrics/` · `guardrails.py` (quarantine — DemandSensing) · `selection.py`
-  (**1-SE kuralı** default + class-weighted + promotion rules) · `comparison_tests.py`
-  (MCB / Diebold-Mariano, forecasting, opsiyonel)
-- **Seçim yalnız OOF/validation**; test'e tek dokunuş `engines`'te; `noise_floor`
-  (metrik SE), `selection_bias_bound` σ√(2 ln K), `realized_seconds` + K raporlanır
+## scoring/  (ADR 0014 — dürüst seçim, KOD YAZILDI)
+- **Girdi:** `[ValidationReport]` + `[Candidate]` + `RunConfig` + `TaskSpec` + `DataProfile`
+- **Çıktı:** `score_reports(...) -> SelectionResult` (`ScoreBoard` + champion + promotion)
+- `metrics/` — sMAPE/MAPE/WMAPE/RMSE/MAE/bias/CSL + accuracy/f1_macro/balanced_accuracy
+- `guardrails.py` — quarantine: non-finite metrik · `prediction_health` (negatif/aşırı/
+  scale-ratio; negatif yalnız `target_min≥0`) · metrik tavanları · model×scenario blocklist ·
+  leakage FAIL
+- `selection.py` — **1-SE kuralı** (default): birincil metrikte en iyinin `noise_floor`
+  bandındaki en **basit/ucuz** aday (`_FAMILY_COMPLEXITY`). `best` = sadece en iyi metrik.
+  `class_weighted_score` v1'de **bilgilendirme** (per-class SE yok → seçime girmez, v1.1).
+  `promotion` = mutlak eşikler (smape_max/abs_bias_max/rmse_max/min_folds/leakage)
+- `comparison_tests.py` — MCB ortalama rank + Diebold-Mariano (HLN düzeltmesi, scipy);
+  forecasting + ≥3 fold, opsiyonel
+- **Seçim yalnız OOF**; `noise_floor` (metrik SE medyanı), `selection_bias_bound = σ·√(2 ln K)`
+- `RunConfig.promotion` (`PromotionConfig`); `GuardrailConfig` prediction eşikleri
 
 ## engines/  (ADR 0015 — orkestrasyon)
 - **Girdi:** `Dataset` + `RunConfig` + `DataProfile` + `TaskSpec`

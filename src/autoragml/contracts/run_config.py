@@ -22,6 +22,7 @@ from autoragml.contracts.enums import (
     Task,
     TrackingBackend,
 )
+from autoragml.contracts.promotion_config import PromotionConfig
 from autoragml.contracts.validation_config import ValidationConfig
 
 
@@ -86,6 +87,8 @@ class GuardrailConfig(Contract):
     rmse_mean_max: float | None = None
     wmape_mean_max: float | None = None
     abs_bias_mean_max: float | None = None
+    prediction_hard_abs_max: float | None = None
+    prediction_scale_multiplier_max: float | None = 100.0
     model_scenario_blocklist: dict[str, list[str]] = Field(default_factory=dict)
 
 
@@ -118,6 +121,7 @@ class RunConfig(Contract):
     tracking: TrackingConfig = Field(default_factory=TrackingConfig)
     llm: LLMConfig | None = None
     guardrails: GuardrailConfig = Field(default_factory=GuardrailConfig)
+    promotion: PromotionConfig = Field(default_factory=PromotionConfig)
 
     # --- modelleme ---
     scenarios: list[str] = Field(default_factory=lambda: ["scenario_1"])

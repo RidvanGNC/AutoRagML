@@ -9,6 +9,14 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 ## [Unreleased]
 
 ### Eklendi
+- **`scoring/` katmanı kodlandı** (ADR 0014): `score_reports(reports, candidates, config, task, profile) -> SelectionResult`.
+  - `guardrails.py` — quarantine: non-finite metrik · prediction_health (negatif/scale-ratio; negatif yalnız hedef≥0) · metrik tavanları · model×scenario blocklist · leakage FAIL
+  - `selection.py` — **1-SE kuralı** (default): birincil metrikte en iyinin noise_floor bandındaki en basit/ucuz aday; `best` alternatifi; `promotion` (mutlak eşikler); `class_weighted_score` v1'de bilgilendirme (per-class SE yok → v1.1)
+  - `comparison_tests.py` — MCB ortalama rank + Diebold-Mariano (HLN düzeltmesi, scipy); forecasting + ≥3 fold
+  - `__init__.build_scoreboard` — `noise_floor` (SE medyanı) + `selection_bias_bound = σ√(2lnK)`
+- Sözleşme: `RunConfig.promotion` (`PromotionConfig`), `GuardrailConfig` prediction eşikleri, `ValidationReport.prediction_health` + `.oof` (excluded `OOFArrays`), `ScoreRow.family`.
+- Çekirdek dep: `scipy>=1.11` (zaten sklearn/lightgbm transitif). `validators.frame_ops` — `OOFArrays` + `prediction_health`.
+- `tests/unit/scoring/` — 18 test.
 - **`fine_tuners/` katmanı kodlandı** (ADR 0013): `validators.Tuner` protokolünü gerçekler.
   - `random_search.py` — `RandomSearchTuner`: random search + `Candidate.fidelity` varsa **Successive Halving** (`halving.py`, eta=3, doğrulanmış formül). Kooperatif bütçe + ADR 0008/1 projeksiyon uyarısı
   - `optuna_backend.py` — `OptunaTuner` (TPE, `[hpo]` extra). v1: sabit fidelity (ara-adım pruning callback v1.1)

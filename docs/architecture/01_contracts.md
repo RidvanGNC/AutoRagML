@@ -41,7 +41,8 @@ Serialize edilebilir (pydantic v2). **Sır taşımaz** — yalnız `*_env` adlar
 | `scenarios` | `list[str]` | `["scenario_1"]` | TS engine; `scenario_2` opt-in |
 | `hpo_level` | `HpoLevel` | `"light"` | `none` \| `light` \| `thorough` (ADR 0013) |
 | `hpo_backend` | `HpoBackend` | `"random_search"` | `optuna` opsiyonel (`[hpo]`) |
-| `guardrails` | obj | `{enabled: true}` | eşikler `scoring` varsayılanından |
+| `guardrails` | `GuardrailConfig` | `{enabled: true, prediction_scale_multiplier_max: 100}` | metrik tavanları + prediction eşikleri + `model_scenario_blocklist` (ADR 0014) |
+| `promotion` | `PromotionConfig` | `{smape_max: 35, min_folds: 2, require_leakage_pass: true}` | mutlak eşik kapısı (ADR 0014) — bilgilendirir, engellemez |
 | `engines` | obj \| None | `None` | aktif engine + override; `None` → analyzers seçer |
 | `analyzers` | `AnalyzerConfig` | varsayılan | ADR 0010 eşikleri: `thresholds` + `timeseries` + `profiling_sample_rows` |
 | `dynamics` | `DynamicsConfig` | varsayılan | ADR 0007/0015: `structure`, per-group eşikleri, transform seçenekleri, kodlama, `recipes[]`, `drop_leakage_suspects` |

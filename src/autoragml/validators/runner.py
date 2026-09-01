@@ -27,8 +27,10 @@ from autoragml.models import build_estimator
 from autoragml.preprocessors import FeaturePipeline, TargetTransform
 from autoragml.scoring.metrics import compute_metrics
 from autoragml.validators.frame_ops import (
+    OOFArrays,
     column_roles,
     fit_estimator,
+    prediction_health,
     reserved_columns,
     split_xy,
     target_transform_choice,
@@ -108,6 +110,7 @@ def run_validation(
     fold_reports: list[FoldReport] = []
     oof_true: list[_Arr] = []
     oof_pred: list[_Arr] = []
+    oof_group: list[np.ndarray] = []
     all_violations = []
     any_nested = False
 
@@ -159,10 +162,13 @@ def run_validation(
         )
         oof_true.append(np.asarray(y_test, dtype=np.float64))
         oof_pred.append(y_pred)
+        if task.group_col and task.group_col in test.columns:
+            oof_group.append(test[task.group_col].to_numpy().astype(object))
 
     oof_t = np.concatenate(oof_true)
     oof_p = np.concatenate(oof_pred)
     oof_metrics = compute_metrics(oof_t, oof_p, task.task)
+    group_arr = np.concatenate(oof_group) if len(oof_group) == len(fold_reports) and oof_group else None
 
     oof_se: dict[str, float] = {}
     if len(fold_reports) >= 2:
@@ -178,9 +184,11 @@ def run_validation(
         folds=fold_reports,
         oof_metrics=oof_metrics,
         oof_metric_se=oof_se,
+        prediction_health=prediction_health(oof_t, oof_p),
         leakage=merge_leakage(all_violations),
         nested=any_nested,
         realized_seconds=round(time.perf_counter() - start, 3),
+        oof=OOFArrays(y_true=oof_t, y_pred=oof_p, group=group_arr),
     )
 
 

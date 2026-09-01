@@ -7,6 +7,7 @@ olduğuna karar verir.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -24,6 +25,29 @@ from autoragml.logging import get_logger
 logger = get_logger(__name__)
 
 _Arr = npt.NDArray[np.float64]
+
+
+@dataclass
+class OOFArrays:
+    """Out-of-fold tahminler — `scoring` class-weighted skoru + guardrail için."""
+
+    y_true: _Arr
+    y_pred: _Arr
+    group: npt.NDArray[np.object_] | None = None
+
+
+def prediction_health(y_true: _Arr, y_pred: _Arr) -> dict[str, float]:
+    """Tahmin sağlık istatistikleri (ADR 0014 guardrail girdisi)."""
+    finite = np.isfinite(y_pred)
+    pred_abs_max = float(np.max(np.abs(y_pred[finite]))) if finite.any() else 0.0
+    true_abs_max = float(np.max(np.abs(y_true[np.isfinite(y_true)]))) if np.isfinite(y_true).any() else 0.0
+    return {
+        "n_non_finite": float((~finite).sum()),
+        "n_negative": float((y_pred[finite] < 0).sum()),
+        "pred_abs_max": pred_abs_max,
+        "true_abs_max": true_abs_max,
+        "pred_scale_ratio": pred_abs_max / true_abs_max if true_abs_max > 0 else 0.0,
+    }
 
 
 def reserved_columns(task: TaskSpec) -> set[str]:

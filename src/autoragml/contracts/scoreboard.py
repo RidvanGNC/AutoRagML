@@ -16,6 +16,7 @@ class ScoreRow(Contract):
     """Bir (model, senaryo) kombinasyonunun OOF skoru + guardrail durumu."""
 
     model_key: str
+    family: str = "ml"
     scenario: str = "scenario_1"
     oof_metric_mean: float
     oof_metric_se: float = Field(ge=0.0)

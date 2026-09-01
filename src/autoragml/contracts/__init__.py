@@ -37,6 +37,7 @@ from autoragml.contracts.dynamics_config import DynamicsConfig
 from autoragml.contracts.engine_result import EngineResult
 from autoragml.contracts.model_bundle import BundleMetadata, ModelBundle
 from autoragml.contracts.plan_context import PlanContext
+from autoragml.contracts.promotion_config import PromotionConfig
 from autoragml.contracts.run_config import (
     BudgetConfig,
     GuardrailConfig,
@@ -103,6 +104,7 @@ __all__ = [
     "LeakageViolation",
     "ModelBundle",
     "PlanContext",
+    "PromotionConfig",
     "PromotionResult",
     "QualityFlag",
     "RegimeDef",

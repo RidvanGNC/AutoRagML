@@ -6,6 +6,8 @@ iç resample'da; dış fold yalnız skorlar. Leakage 3 kategori → BLOCK.
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import Field
 
 from autoragml.contracts._base import Contract
@@ -50,6 +52,10 @@ class ValidationReport(Contract):
     oof_metrics: dict[str, float] = Field(default_factory=dict)
     oof_metric_se: dict[str, float] = Field(default_factory=dict)
     oof_predictions_ref: str | None = None
+    prediction_health: dict[str, float] = Field(default_factory=dict)  # ADR 0014 guardrail girdisi
     leakage: LeakageReport = Field(default_factory=LeakageReport)
     nested: bool = True  # HPO/candidate_ops iç resample'da mı (ADR 0010/6)
     realized_seconds: float = Field(default=0.0, ge=0.0)
+
+    # OOF dizileri (y_true / y_pred / group) — serialize edilmez; scoring class-weighted için.
+    oof: Any = Field(default=None, exclude=True, repr=False)
