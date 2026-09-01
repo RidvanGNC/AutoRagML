@@ -21,3 +21,7 @@ class DataLoadError(AutoRagMLError):
 
 class EngineError(AutoRagMLError):
     """Engine orkestrasyon hatası (ADR 0015)."""
+
+
+class PersistenceError(AutoRagMLError):
+    """Bundle serialize/load, manifest yazımı veya çıktı klasörü hatası (ADR 0018)."""

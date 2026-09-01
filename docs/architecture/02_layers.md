@@ -161,10 +161,20 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
   hook `interfaces` enjekte eder (RunConfig'e girmez)
 - `BundleMetadata.postprocess_summary` — uygulanan adımların serialize kaydı
 
-## persistence/
-- **Girdi:** champion pipeline + tüm contract nesneleri
-- **Çıktı:** `ModelBundle` dosyası + `RunManifest` + `outputs/<DDMMYYYY>_<proje>_outputs/<run_id>/`
-  alt yapısı (`evaluation/`, `models/`, `reports/`, `config_snapshot/`)
+## persistence/  (ADR 0018 — KOD YAZILDI)
+- **Girdi:** `RunConfig` + `Dataset` + `EngineResult` (+ opsiyonel reports/holdout/timeline)
+- **Çıktı:** `persist_run(...) -> (RunPaths, RunManifest)` — tam koşum dizini
+- `paths.create_run_dir` → `<output_dir>/<DDMMYYYY>_<proje>_outputs/<run_id>/`
+  (`run_id = UTC %Y%m%dT%H%M%SZ`; çakışma → `-01` soneki; dolu dizin sessizce ezilmez)
+  alt: `models/ evaluation/ reports/ config_snapshot/`
+- `bundle.save_bundle` / `load_bundle` — **joblib tek dosya** (`champion.joblib`: canlı
+  `pipeline` + metadata + metrikler + `saved_env`). `load_bundle`: `format_version` uyuşmazlığı
+  → hata; sklearn/lightgbm minor sapması → WARNING. **Güvenlik:** pickle kod çalıştırır → uyarı
+- `manifest.build_manifest` — fingerprint + `config.model_dump(mode="json")` + env (python/os/
+  paket sürümleri/git commit best-effort) + data snapshot + timeline; reprodüksiyona yeter
+- `dump.write_json` deterministik (`sort_keys`, newline); `persist_evaluation` (scoreboard/
+  selection/comparison_tests + opsiyonel fold/holdout); `persist_config_snapshot` (**`.env` asla**)
+- yeni: `exceptions.PersistenceError`; nihai holdout tek-seferlik skorlama → orchestrator (ADR 0020)
 
 ## reporters/
 - **Girdi:** contract nesneleri + `RunManifest`

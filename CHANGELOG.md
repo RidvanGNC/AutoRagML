@@ -18,6 +18,19 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 - `test_timeseries_and_leakage.py`: `DatetimeIndex + pd.Timedelta` aritmetiği ayrı `date_range` ile değiştirildi (NumPy 2.5 "generic timedelta unit" DeprecationWarning).
 
 ### Eklendi
+- **`persistence/` katmanı kodlandı** (ADR 0018): `persist_run(config, dataset, engine_result, ...) ->
+  (RunPaths, RunManifest)` — yan etkisi olan katman.
+  - `paths.create_run_dir` → `<output_dir>/<DDMMYYYY>_<proje>_outputs/<run_id>/` (`run_id = UTC
+    %Y%m%dT%H%M%SZ`; çakışma → `-01`; dolu dizin sessizce ezilmez) alt: `models/ evaluation/ reports/ config_snapshot/`
+  - `bundle.save_bundle`/`load_bundle` — **joblib tek dosya** (canlı `pipeline` + metadata + `saved_env`);
+    yüklemede `format_version` + sklearn/lightgbm sürüm sapması kontrolü; pickle güvenlik uyarısı
+  - `manifest.build_manifest` — fingerprint + config snapshot + env (python/os/paket sürümleri/git commit) +
+    data snapshot + timeline → reprodüksiyona yeter
+  - `dump.write_json` deterministik (`sort_keys`, sonda newline); `persist_evaluation` / `persist_config_snapshot`
+    (**`.env` asla kopyalanmaz**)
+- Sözleşme: `exceptions.PersistenceError`. mypy override'a `joblib.*` eklendi.
+- `tests/unit/persistence/` — 9 test (run_id formatı, klasör düzeni + çakışma soneki, bundle round-trip
+  aynı tahmin, format guard'ları, deterministik JSON, `persist_run` tam ağaç + sırsızlık).
 - **`postprocessors/` katmanı kodlandı** (ADR 0017): `build_postprocessor(cfg, profile, task) -> Postprocessor`
   → `.fit(y_true?, y_pred?) -> FittedPostprocessor` (`ModelBundle.pipeline`'a gömülür).
   - Sıra: `calibrate → clip → round → business_rule` (`_POST_ORDER`)
