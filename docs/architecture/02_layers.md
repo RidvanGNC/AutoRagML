@@ -132,16 +132,19 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
 - **Seçim yalnız OOF**; `noise_floor` (metrik SE medyanı), `selection_bias_bound = σ·√(2 ln K)`
 - `RunConfig.promotion` (`PromotionConfig`); `GuardrailConfig` prediction eşikleri
 
-## engines/  (ADR 0015 — orkestrasyon)
-- **Girdi:** `Dataset` + `RunConfig` + `DataProfile` + `TaskSpec`
-- **Çıktı:** `EngineResult`
-- İç akış: `dynamics.planner` → `registry.resolve` → `validators` (nested CV) →
-  `scoring` (OOF seçim) → şampiyon refit (tüm train) + postprocessors → `ModelBundle`
-- `tabular/core_engine`, `timeseries/core_engine`, opsiyonel `statsforecast_engine`
-- `runners/`: InProcess (varsayılan) | Subprocess | Container/Remote (v2+)
-- Üstünde `Orchestrator` (interfaces/api): config→io→analyzers→engine seçimi→engine(ler)
-  →(çok engine ise en iyi / v1.1 ensemble)→final holdout (bir kez)→persistence→reporters
-  → `RunResult`
+## engines/  (ADR 0015 — orkestrasyon, KOD YAZILDI)
+- **Girdi:** `Dataset` + `RunConfig` + `DataProfile` + `TaskSpec` · **Çıktı:** `EngineResult`
+- `select_engine(task, config)` → `TabularCoreEngine` | `TimeSeriesCoreEngine`
+  (`RunConfig.engines={"key": ...}` override)
+- `core.run_core_pipeline` (ortak): `build_plan` → `resolve_candidates` →
+  `run_validation_suite(tuner=resolve_tuner(config))` → `score_reports` → `refit_champion`
+  (tüm train; ES modelde `n_estimators`=validation `best_iteration` medyanı) → `ModelBundle`
+- `timeseries/reduction.py` — **leakage-safe** lag/rolling/ewm özellikleri (`shift ≥ horizon`);
+  yeni kolonlar profile'a eklenir; `pre_transform` bundle'a gömülür (predict'te yeniden uygulanır)
+- `champion.py` + `model_pipeline.py` — `FittedModelPipeline` (`ModelBundle.pipeline`;
+  `raw_df → pre_transform? → feature pipeline → estimator → target inverse`)
+- `runners/InProcessRunner` — engine'i sarar; çökme → `EngineResult(status=FAILED)`
+- **v1 sınırı:** `per_group_champion` planlanır ama pooled ile ilerlenir (per-group refit v1.1)
 
 ## postprocessors/
 - **Girdi:** ham tahmin + `AdaptivePlan` + business kuralları

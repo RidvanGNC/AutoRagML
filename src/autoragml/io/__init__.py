@@ -30,7 +30,18 @@ logger = get_logger(__name__)
 
 _DEFAULT_EAGER_MAX_BYTES = 1_073_741_824  # 1 GiB
 
-__all__ = ["DbSource", "LazyFrame", "load_dataset"]
+__all__ = ["DbSource", "LazyFrame", "load_dataset", "materialize_frame"]
+
+
+def materialize_frame(dataset: Dataset) -> pd.DataFrame:
+    """`Dataset`'in tam DataFrame'i — eager: handle; lazy: `to_pandas()` (uyarı loglar)."""
+    handle = dataset.handle
+    if isinstance(handle, pd.DataFrame):
+        return handle
+    if isinstance(handle, LazyFrame):
+        return handle.to_pandas()
+    msg = f"Dataset.handle beklenmeyen tip: {type(handle).__name__}"
+    raise DataLoadError(msg)
 
 
 def _eager_threshold(config: RunConfig) -> int:

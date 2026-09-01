@@ -9,6 +9,18 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 ## [Unreleased]
 
 ### Eklendi
+- **`engines/` katmanı kodlandı** (ADR 0015): `select_engine(task, config)` + `InProcessRunner`.
+  - `core.run_core_pipeline` — ortak akış: `build_plan` → `resolve_candidates` → `run_validation_suite(tuner=resolve_tuner)` → `score_reports` → `refit_champion` (tüm train; ES modelde n_estimators = validation best_iteration medyanı) → `ModelBundle`
+  - `TabularCoreEngine` / `TimeSeriesCoreEngine`
+  - `timeseries/reduction.py` — **leakage-safe** lag/rolling/ewm özellikleri (`shift ≥ horizon` → h-adım direkt tahminde test yalnız train `y`'sini görür); recursive multi-step v1.1
+  - `model_pipeline.FittedModelPipeline` — `ModelBundle.pipeline` runtime nesnesi (`pre_transform` → feature pipeline → estimator → target inverse); TS'de reduction FE predict'te yeniden uygulanır
+  - `runners/` — `EngineRunner` protokolü + `InProcessRunner` (çökme → `status=FAILED`)
+- Sözleşme: `ValidationReport.prediction_health` + `.oof` (`OOFArrays`), `ScoreRow.family` (scoring turunda eklendi); `io.materialize_frame`.
+- `tests/unit/engines/` — 9 test (reduction leakage-safety + grup izolasyonu, tabular/TS uçtan uca, predict, runner failure wrap).
+
+### Değişti
+- pytest: `ConvergenceWarning` + `eval_set` DeprecationWarning filtrelendi; engine e2e testleri `hpo_level=none` ile hızlandı.
+- **v1 sınırı:** `per_group_champion` planlanır, pooled ile ilerlenir (per-group refit v1.1).
 - **`scoring/` katmanı kodlandı** (ADR 0014): `score_reports(reports, candidates, config, task, profile) -> SelectionResult`.
   - `guardrails.py` — quarantine: non-finite metrik · prediction_health (negatif/scale-ratio; negatif yalnız hedef≥0) · metrik tavanları · model×scenario blocklist · leakage FAIL
   - `selection.py` — **1-SE kuralı** (default): birincil metrikte en iyinin noise_floor bandındaki en basit/ucuz aday; `best` alternatifi; `promotion` (mutlak eşikler); `class_weighted_score` v1'de bilgilendirme (per-class SE yok → v1.1)

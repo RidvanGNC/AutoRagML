@@ -96,3 +96,7 @@ warn_required_dynamic_aliases = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+filterwarnings = [
+    "ignore::sklearn.exceptions.ConvergenceWarning",
+    "ignore:.*eval_set.*:DeprecationWarning",
+]

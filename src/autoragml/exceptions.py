@@ -17,3 +17,7 @@ class PresetError(ConfigError):
 
 class DataLoadError(AutoRagMLError):
     """Veri yükleme / şema / fingerprint hatası (ADR 0009)."""
+
+
+class EngineError(AutoRagMLError):
+    """Engine orkestrasyon hatası (ADR 0015)."""
