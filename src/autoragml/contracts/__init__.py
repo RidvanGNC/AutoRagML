@@ -35,6 +35,7 @@ from autoragml.contracts.data_profile import (
 from autoragml.contracts.dataset import Dataset, DatasetShape, DataSource
 from autoragml.contracts.dynamics_config import DynamicsConfig
 from autoragml.contracts.engine_result import EngineResult
+from autoragml.contracts.ensemble_spec import EnsembleSpec
 from autoragml.contracts.model_bundle import BundleMetadata, ModelBundle
 from autoragml.contracts.plan_context import PlanContext
 from autoragml.contracts.postprocess_config import (
@@ -47,6 +48,7 @@ from autoragml.contracts.postprocess_config import (
 from autoragml.contracts.promotion_config import PromotionConfig
 from autoragml.contracts.run_config import (
     BudgetConfig,
+    EnsembleConfig,
     GuardrailConfig,
     IOConfig,
     LLMConfig,
@@ -103,6 +105,8 @@ __all__ = [
     "DatasetShape",
     "DynamicsConfig",
     "EngineResult",
+    "EnsembleConfig",
+    "EnsembleSpec",
     "EnvInfo",
     "FoldReport",
     "FrozenContract",

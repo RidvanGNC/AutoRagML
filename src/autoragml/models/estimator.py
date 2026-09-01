@@ -62,11 +62,17 @@ def build_estimator(
         msg = f"{candidate.key}: estimator parametreleri geçersiz ({merged}): {exc}"
         raise EstimatorBuildError(msg) from exc
 
-    if candidate.wrap:
+    if candidate.wrap or candidate.scale:
         from sklearn.impute import SimpleImputer
         from sklearn.pipeline import Pipeline
 
-        return Pipeline(
-            [("imputer", SimpleImputer(strategy="median", keep_empty_features=True)), ("model", estimator)]
-        )
+        steps: list[tuple[str, Any]] = [
+            ("imputer", SimpleImputer(strategy="median", keep_empty_features=True))
+        ]
+        if candidate.scale:
+            from sklearn.preprocessing import StandardScaler
+
+            steps.append(("scaler", StandardScaler()))
+        steps.append(("model", estimator))
+        return Pipeline(steps)
     return estimator

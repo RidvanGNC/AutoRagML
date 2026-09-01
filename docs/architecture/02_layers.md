@@ -132,6 +132,19 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
 - **Seçim yalnız OOF**; `noise_floor` (metrik SE medyanı), `selection_bias_bound = σ·√(2 ln K)`
 - `RunConfig.promotion` (`PromotionConfig`); `GuardrailConfig` prediction eşikleri
 
+## ensembling/  (ADR 0021 — KOD YAZILDI)
+- **Girdi:** `[ValidationReport]` (hizalı OOF) + `[Candidate]` + `RunConfig` + `TaskSpec` + `DataProfile`
+- **Çıktı:** `build_weighted_ensemble(...) -> (ValidationReport, Candidate, EnsembleSpec) | None`
+- `greedy.py` — saf numpy Caruana GES: boş ensemble → her tur validation'ı en çok iyileştiren
+  modeli **tekrarlı** ekle; 6-ondalık tie yuvarlama, tie-break en düşük indeks, **use_best**
+  (görülen en iyi ensemble'a dön). `bagged_greedy_selection` — model alt-kümelerinde tekrarlı GES,
+  seed'li, ağırlık ortalaması (Caruana 2006)
+- Sentetik `weighted_ensemble` raporu + candidate `engines/core`'da `reports`/`candidates`'e eklenir →
+  `select_champion` (1-SE) onu da tartar; `_FAMILY_COMPLEXITY["ensemble"]=5` (tek model eşitse tek model)
+- **v1: regresyon + forecasting** (OOF nokta tahmini → ağırlıklı ortalama). Sınıflandırma GES v1.1
+- `engines/champion._refit_ensemble` — her üye **postprocess'siz** refit → `FittedEnsemblePipeline`
+  (`Σ w_i·member_i.predict` + tek ensemble-düzeyi postprocess)
+
 ## engines/  (ADR 0015 — orkestrasyon, KOD YAZILDI)
 - **Girdi:** `Dataset` + `RunConfig` + `DataProfile` + `TaskSpec` · **Çıktı:** `EngineResult`
 - `select_engine(task, config)` → `TabularCoreEngine` | `TimeSeriesCoreEngine`

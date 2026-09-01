@@ -8,6 +8,25 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 
 ## [Unreleased]
 
+### Eklendi
+- **`ensembling/` katmanı** (ADR 0021): Caruana greedy ensemble selection (+ bagged-GES).
+  - `greedy.py` — saf numpy GES: her tur validation'ı en çok iyileştiren modeli **tekrarlı** ekle;
+    6-ondalık tie yuvarlama + en düşük indeks tie-break + **use_best**. `bagged_greedy_selection`
+    (model alt-kümelerinde tekrarlı GES, seed'li, ağırlık ortalaması — Caruana 2006). Temiz implementasyon
+    (akademik makaleden; `_vendor/` kopyalama planı iptal — NOTICE güncellendi).
+  - `build_weighted_ensemble(reports, candidates, config, task, profile)` → sentetik `weighted_ensemble`
+    `ValidationReport` + `Candidate` + `EnsembleSpec`; `engines/core`'da tek-model şampiyonuyla aynı
+    **1-SE seçiminde** yarışır (`_FAMILY_COMPLEXITY["ensemble"]=5`).
+  - `engines/champion._refit_ensemble` — her üye **postprocess'siz** refit → `FittedEnsemblePipeline`
+    (`Σ wᵢ·memberᵢ.predict` + tek ensemble-düzeyi postprocess).
+  - **v1: regresyon + forecasting** (OOF nokta tahmini). Sınıflandırma GES (olasılık OOF) → v1.1.
+- **Model kataloğu:** `mlp` (sklearn `MLPRegressor/Classifier`) **etkinleştirildi** — ilk "neural" adım;
+  `scale: true` → `build_estimator` wrap'e `StandardScaler` eklendi. `Candidate.scale` alanı.
+- Sözleşme: `EnsembleSpec`, `RunConfig.ensemble` (`EnsembleConfig`), `BundleMetadata.ensemble`,
+  `Candidate.ensemble_members`/`scale`. `EngineStatus`: ensemble/reduction mesajları artık PARTIAL yapmıyor
+  (yalnız gerçek sorunlar).
+- `tests/unit/ensembling/` (9) + `tests/unit/engines/test_ensemble_integration.py` (3) — 246 test toplam.
+
 ### Düzeltildi
 - **CI macOS:** `brew install libomp` adımı eklendi — LightGBM'in OpenMP runtime'ı olmadan
   import edilemiyordu → registry `lightgbm`'i düşürüyor → 7 test (`test_tuners`, `test_estimator`,

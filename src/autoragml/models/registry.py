@@ -135,6 +135,7 @@ def _build_candidate(key: str, entry: JsonDict, *, source: CandidateSource) -> C
             early_stopping_rounds=entry.get("early_stopping_rounds"),
             requires=requires,
             wrap=bool(entry.get("wrap", False)),
+            scale=bool(entry.get("scale", False)),
             source=source,
         )
     except Exception as exc:  # noqa: BLE001

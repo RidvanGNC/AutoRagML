@@ -38,5 +38,7 @@ class Candidate(Contract):
     supports_early_stopping: bool = False
     early_stopping_rounds: int | None = None
     requires: list[str] = Field(default_factory=list)
-    wrap: bool = False  # imputer/scaler sarımı gerekli mi
+    wrap: bool = False  # imputer sarımı (NaN son savunma)
+    scale: bool = False  # StandardScaler sarımı (MLP/mesafe modelleri)
     source: CandidateSource = CandidateSource.BUILTIN_CATALOG
+    ensemble_members: dict[str, float] | None = None  # yalnız key="weighted_ensemble" (ADR 0021)

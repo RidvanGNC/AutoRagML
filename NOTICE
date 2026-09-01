@@ -7,11 +7,22 @@ Her vendor edilen dosyanın başında ayrıca kaynak, orijinal telif ve
 "Modified by AutoRagML, <tarih>" notu bulunur.
 
 --------------------------------------------------------------------------------
+Algoritma atıfları (kod kopyalanmadı — temiz implementasyon):
+
+* Greedy Ensemble Selection — `src/autoragml/ensembling/greedy.py`
+  Caruana, Niculescu-Mizil, Crew, Ksikes. "Ensemble Selection from Libraries of
+  Models" (ICML 2004) + Caruana et al. "Getting the Most Out of Ensemble
+  Selection" (ICDM 2006, bagging).
+  Referans implementasyonlar (kopyalanmadı, yalnız doğrulama için incelendi):
+  AutoGluon (Apache-2.0, Amazon.com Inc.), auto-sklearn (BSD-3).
+  ADR 0021: `_vendor/` kopyalama planı iptal — algoritma akademik makaleden.
+
+--------------------------------------------------------------------------------
 Planlanan (henüz eklenmedi):
 
 * AutoGluon (Apache License 2.0)
   Copyright Amazon.com, Inc. or its affiliates.
   https://github.com/autogluon/autogluon
-  Alınacak parça: weighted ensemble selection (Caruana et al. greedy forward
-  selection) ve problem-type çıkarımı yardımcıları.
+  Alınacak parça: Caruana ensemble için değil (bkz. yukarı) — Pareto-frontier
+  çoklu ensemble ve tam AutoGluon opsiyonel engine eklentisi (v1.1+).
 --------------------------------------------------------------------------------

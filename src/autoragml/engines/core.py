@@ -17,6 +17,7 @@ from autoragml.contracts.run_config import RunConfig
 from autoragml.contracts.task_spec import TaskSpec
 from autoragml.dynamics import build_plan
 from autoragml.engines.champion import refit_champion
+from autoragml.ensembling import build_weighted_ensemble
 from autoragml.exceptions import EngineError
 from autoragml.fine_tuners import resolve_tuner
 from autoragml.logging import get_logger
@@ -40,12 +41,14 @@ def run_core_pipeline(
 ) -> EngineResult:
     """Standart dynamics→models→validators→scoring→refit akışı."""
     msgs = list(messages or [])
+    degraded = False  # yalnız gerçek sorunlar PARTIAL yapar; ensemble/reduction bilgi amaçlı
     tuner = tuner or resolve_tuner(config)
 
     plan = build_plan(profile, task, config)
     if plan.structure == "per_group_champion":
         msgs.append("per_group_champion planlandı — v1 pooled ile ilerliyor (per-group refit v1.1).")
         logger.info("[engine] %s", msgs[-1])
+        degraded = True
 
     candidates = resolve_candidates(config, task)
     logger.info("[engine %s] %d aday doğrulanıyor", engine_key, len(candidates))
@@ -57,6 +60,17 @@ def run_core_pipeline(
     if len(reports) < len(candidates):
         failed = {c.key for c in candidates} - {r.candidate_key for r in reports}
         msgs.append(f"doğrulanamayan adaylar: {sorted(failed)}")
+        degraded = True
+
+    ensemble = build_weighted_ensemble(reports, candidates, config, task, profile)
+    if ensemble is not None:
+        ens_report, ens_candidate, ens_spec = ensemble
+        reports = [*reports, ens_report]
+        candidates = [*candidates, ens_candidate]
+        msgs.append(
+            f"weighted_ensemble: {len(ens_spec.member_keys)} üye / {ens_spec.base_model_count} taban "
+            f"({ens_spec.method})"
+        )
 
     selection = score_reports(reports, candidates, config, task, profile)
     champion = refit_champion(
@@ -64,7 +78,7 @@ def run_core_pipeline(
         tuner=tuner, pre_transform=pre_transform,
     )
 
-    status = EngineStatus.SUCCESS if not msgs else EngineStatus.PARTIAL
+    status = EngineStatus.PARTIAL if degraded else EngineStatus.SUCCESS
     return EngineResult(
         engine_key=engine_key,
         status=status,

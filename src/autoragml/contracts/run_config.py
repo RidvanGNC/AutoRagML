@@ -93,6 +93,18 @@ class GuardrailConfig(Contract):
     model_scenario_blocklist: dict[str, list[str]] = Field(default_factory=dict)
 
 
+class EnsembleConfig(Contract):
+    """Caruana greedy ensemble selection ayarları (ADR 0021)."""
+
+    enabled: bool = True
+    max_models: int = Field(default=50, ge=1)  # GES tur sayısı
+    sorted_init_k: int = Field(default=1, ge=0)
+    bagging: bool = True
+    n_bags: int = Field(default=20, ge=1)
+    bag_fraction: float = Field(default=0.5, gt=0.0, le=1.0)
+    min_base_models: int = Field(default=2, ge=2)
+
+
 class RunConfig(Contract):
     """Bir AutoRagML koşumunun tüm yapılandırması. Serialize edilebilir; sır yok."""
 
@@ -124,6 +136,7 @@ class RunConfig(Contract):
     guardrails: GuardrailConfig = Field(default_factory=GuardrailConfig)
     promotion: PromotionConfig = Field(default_factory=PromotionConfig)
     postprocess: PostprocessConfig = Field(default_factory=PostprocessConfig)
+    ensemble: EnsembleConfig = Field(default_factory=EnsembleConfig)
 
     # --- modelleme ---
     scenarios: list[str] = Field(default_factory=lambda: ["scenario_1"])

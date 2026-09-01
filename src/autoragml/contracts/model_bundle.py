@@ -29,6 +29,7 @@ class BundleMetadata(Contract):
     adaptive_plan_summary: dict[str, Any] = Field(default_factory=dict)
     params: dict[str, Any] = Field(default_factory=dict)
     postprocess_summary: dict[str, Any] = Field(default_factory=dict)  # uygulanan düzeltme adımları (ADR 0017)
+    ensemble: dict[str, Any] = Field(default_factory=dict)  # üye key → ağırlık (ADR 0021); tek modelde boş
 
 
 class ModelBundle(Contract):

@@ -44,6 +44,7 @@ Serialize edilebilir (pydantic v2). **Sır taşımaz** — yalnız `*_env` adlar
 | `guardrails` | `GuardrailConfig` | `{enabled: true, prediction_scale_multiplier_max: 100}` | metrik tavanları + prediction eşikleri + `model_scenario_blocklist` (ADR 0014) |
 | `promotion` | `PromotionConfig` | `{smape_max: 35, min_folds: 2, require_leakage_pass: true}` | mutlak eşik kapısı (ADR 0014) — bilgilendirir, engellemez |
 | `postprocess` | `PostprocessConfig` | `{enabled: true, clip.auto_nonneg: true, round.mode: off, calibrate.method: off}` | tahmin düzeltme zinciri (ADR 0017); varsayılan ≈ no-op; `calibrate→clip→round→business_rule` |
+| `ensemble` | `EnsembleConfig` | `{enabled: true, max_models: 50, bagging: true, n_bags: 20, bag_fraction: 0.5, min_base_models: 2}` | Caruana GES (ADR 0021); v1: regresyon + forecasting |
 | `engines` | obj \| None | `None` | aktif engine + override; `None` → analyzers seçer |
 | `analyzers` | `AnalyzerConfig` | varsayılan | ADR 0010 eşikleri: `thresholds` + `timeseries` + `profiling_sample_rows` |
 | `dynamics` | `DynamicsConfig` | varsayılan | ADR 0007/0015: `structure`, per-group eşikleri, transform seçenekleri, kodlama, `recipes[]`, `drop_leakage_suspects` |
@@ -144,8 +145,9 @@ Deklaratif, serialize edilebilir. Kod taşımaz; **referans** taşır.
 - `modalities[]`, `tasks[]`, `predict_kind[]` (point|proba|quantile)
 - `search_space` (HPO uzayı — katalog YAML), `fidelity` (multi-fidelity ekseni, ADR 0013)
 - `supports_early_stopping`, `early_stopping_rounds`
-- `requires[]` (pip extra — yoksa entry atlanır), `wrap` (imputer/scaler)
+- `requires[]` (pip extra — yoksa entry atlanır), `wrap` (imputer), `scale` (StandardScaler — MLP)
 - `source`: `builtin_catalog | user_catalog | entry_point`
+- `ensemble_members: dict|None` — yalnız `key="weighted_ensemble"` (üye → ağırlık, ADR 0021)
 
 ### TuningResult  (`fine_tuners/` üretir — ADR 0013)
 - `best_params`, `trials[]`, `spent_budget`, `realized_seconds`
@@ -177,7 +179,8 @@ Deklaratif, serialize edilebilir. Kod taşımaz; **referans** taşır.
 ### ModelBundle  (`persistence/` üretir)
 - `pipeline` (fitted: `FittedTransform`'lar + estimator + postprocessors) — tüm train'de refit
 - `metadata`: feature list + hash, `task_spec`, `adaptive_plan` özeti, config snapshot,
-  `best_iteration` (ES modelleri için sabit), `provenance_fitted_on`, `postprocess_summary` (ADR 0017)
+  `best_iteration` (ES modelleri için sabit), `provenance_fitted_on`, `postprocess_summary` (ADR 0017),
+  `ensemble` (üye key → ağırlık; tek modelde boş — ADR 0021)
 - `champion_info`, `metrics` (OOF + final holdout — bir kez)
 
 ### RunManifest  (`persistence/` üretir — ADR 0015)

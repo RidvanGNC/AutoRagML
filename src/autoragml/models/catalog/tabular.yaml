@@ -169,13 +169,16 @@ catboost:
   fidelity: iterations
 
 mlp:
-  name: MLPRegressor
+  name: MLP
   family: neural
   class_path:
     regression: sklearn.neural_network.MLPRegressor
     classification: sklearn.neural_network.MLPClassifier
-  modalities: [tabular]
-  tasks: [regression, binary_classification, multiclass_classification]
-  enabled: false
-  default_params: {hidden_layer_sizes: [128, 64], early_stopping: true, max_iter: 500, random_state: 42}
+  modalities: [tabular, timeseries]
+  tasks: [regression, forecasting, binary_classification, multiclass_classification]
+  default_params: {hidden_layer_sizes: [128, 64], early_stopping: true, n_iter_no_change: 15, max_iter: 500, random_state: 42}
+  search_space:
+    alpha: {type: loguniform, low: 0.00001, high: 0.1}
+    learning_rate_init: {type: loguniform, low: 0.0002, high: 0.02}
   wrap: true
+  scale: true
