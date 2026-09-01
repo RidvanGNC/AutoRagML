@@ -2,8 +2,17 @@
 
 Modalite-agnostik, **deterministik** AutoML çekirdeği. İlham kaynağı: bir talep-tahmini (demand sensing) MLOps hattının modelleme bel kemiği — model kataloğu → rolling-origin backtest → guardrail'li çok-metrikli skorlama → per-group champion.
 
-> **Durum: tasarım / iskele (v0.0.1, pre-alpha).**
-> Her katman sözleşmesiyle kesinleşmeden implementasyon yazılmıyor. Kodlama sırası: `contracts/` → `config/` → `io/` → `analyzers/` → ...
+> **Durum: v1 katman iskeleti tam (v0.0.1, pre-alpha).**
+> `contracts/` → `config/` → `io/` → `analyzers/` → `dynamics/` → `preprocessors/` → `models/` →
+> `validators/` → `scoring/` → `fine_tuners/` → `engines/` → `postprocessors/` → `persistence/` →
+> `reporters/`+`tracking/` → `interfaces/` — tümü kodlandı (ADR 0008-0020). Sıradaki: Caruana ensemble,
+> statsforecast engine derinleştirme, metin modalitesi.
+>
+> ```python
+> from autoragml import AutoRagML
+> result = AutoRagML(preset="tabular_fast").fit(df, target="sales")
+> result.leaderboard(); result.predict(new_df)
+> ```
 
 ## Hedef
 

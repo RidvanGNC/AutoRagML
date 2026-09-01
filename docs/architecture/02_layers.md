@@ -197,7 +197,23 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
 - providers: openai, anthropic, bedrock, azure_openai, local, null(varsayılan)
 - Çekirdek bağımsız; sırlar env'den
 
-## interfaces/
-- `api.py`: `AutoRagML().fit / predict / leaderboard / explain`
-- `cli.py`: `autoragml run --data ... --target ... --preset ...`
-- `agent_tools.py`: aynı fonksiyonların JSON-schema tanımı (v2 agent katmanı çağırır)
+## interfaces/  (ADR 0020 — KOD YAZILDI)
+- **Girdi:** ham veri + `RunConfig` · **Çıktı:** `RunResult`
+- `orchestrator.Orchestrator.run(data, config, *, resolution=None, tracker=None)` — tek akış:
+  `create_run_dir` → `tracker.start_run` → **[io]** `load_dataset` → **[analyze]** `analyze` →
+  **[holdout_split]** `split_holdout` → **[engine]** `select_engine` + `runner.run(train_dataset)` →
+  **[holdout_score]** `score_holdout` → `champion.metrics_holdout` (**test'e TEK dokunuş**) →
+  **[persist]** `persist_run` → **[report]** `write_reports` → manifest'i tam timeline ile yeniden yaz →
+  `tracker.log_*` + `end_run` → `RunResult`
+- io/analyze hataları **propagate**; engine `FAILED` → akış devam, minimal manifest+rapor, `RunResult`
+  status=FAILED, CLI exit 1. Her stage `TimelineEntry`.
+- `holdout.split_holdout` — `n_rows < ceil(min_rows_for_cv/(1−holdout_fraction))` → holdout yok (WARNING);
+  tabular seed'li rastgele; TS son `min(horizon, n_periods−1)` dönem (`[group,time]` stable sıralı,
+  `shift(horizon)` leakage-safe). `score_holdout` TS'de tüm sıralı frame'de predict + mask ile seçer.
+- `api.AutoRagML(preset=, config_file=, **overrides).fit(data, *, target, time_col=, group_col=)` →
+  `RunResult`; `.leaderboard/.predict/.explain/.champion/.manifest`. `AutoRagML.load(bundle_path)` →
+  `LoadedChampion` (serving).
+- `cli.main` — `autoragml run --data --target [--preset --config --time-col --group-col --output-dir
+  --project-name]`; leaderboard(10)+şampiyon+promotion+çıktı dizini stdout. argparse, ek dep yok.
+- `agent_tools.TOOLS` — `autoragml_run` JSON-schema tanımı (v2 executor yok).
+- v1: hep `InProcessRunner`; `explain()` yapısal; SHAP → v1.1.

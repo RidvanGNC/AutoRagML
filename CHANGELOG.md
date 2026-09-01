@@ -18,6 +18,22 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 - `test_timeseries_and_leakage.py`: `DatetimeIndex + pd.Timedelta` aritmetiği ayrı `date_range` ile değiştirildi (NumPy 2.5 "generic timedelta unit" DeprecationWarning).
 
 ### Eklendi
+- **`interfaces/` katmanı kodlandı** (ADR 0020 — son katman): `Orchestrator` + `AutoRagML` facade + `autoragml run` CLI.
+  - `Orchestrator.run(data, config, *, resolution=None, tracker=None) -> RunResult` — tek akış:
+    `create_run_dir → tracker.start_run → [io] load_dataset → [analyze] analyze → [holdout_split] →
+    [engine] select_engine + runner → [holdout_score] → champion.metrics_holdout (test'e TEK dokunuş) →
+    [persist] persist_run → [report] write_reports → manifest'i tam timeline ile yeniden yaz → tracker.log_* + end_run`.
+    io/analyze fail-fast; engine `FAILED` → akış devam (minimal manifest+rapor, CLI exit 1). Her stage `TimelineEntry`.
+  - `interfaces/holdout.py` — `split_holdout` (yetersiz veri → yok+WARNING; tabular seed'li rastgele;
+    TS son `min(horizon, n_periods−1)` dönem, `[group,time]` stable sıralı, `shift(horizon)` leakage-safe) +
+    `score_holdout` (TS'de tüm sıralı frame'de predict + mask).
+  - `AutoRagML(preset=, config_file=, **overrides).fit(data, *, target, time_col=, group_col=) -> RunResult`;
+    `.leaderboard/.predict/.explain/.champion/.manifest`; `AutoRagML.load(bundle_path) -> LoadedChampion`.
+  - `cli.main` — `autoragml run --data --target [...]`; leaderboard(10) + şampiyon + promotion + çıktı dizini stdout.
+  - `agent_tools.TOOLS` — `autoragml_run` JSON-schema (v2 executor yok).
+- `tests/unit/interfaces/` — 13 test (holdout carve tabular/TS/skip, uçtan uca akış + artifact ağacı +
+  timeline, facade fit/predict/explain/load, CLI smoke).
+- **v1 katman iskeleti tamamlandı** — `contracts`…`interfaces` (ADR 0008-0020).
 - **`reporters/` + `tracking/` katmanları kodlandı** (ADR 0019 — grup: bağımlılıksız çıktı/gözlem sink'leri).
   - `reporters.write_reports(engine_result, manifest, paths, ...)` → `paths.reports/`: `run_report.html`
     (**her zaman**, tek dosya, CDN yok, `html.escape`), `model_card.md` (**her zaman**, Mitchell bölümleri

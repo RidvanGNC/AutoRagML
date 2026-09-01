@@ -58,7 +58,10 @@ Ayrıntı: [`02_layers.md`](02_layers.md). Sözleşmeler: [`01_contracts.md`](01
 
 ## Karar kayıtları
 
-[`decisions/`](decisions/) — 0001…0006. Yeni her mimari karar bir ADR dosyası.
+[`decisions/`](decisions/) — 0001…0020. Yeni her mimari karar bir ADR dosyası.
+Katman kodu: `contracts` → `config` → `io` → `analyzers` → `dynamics` → `preprocessors` →
+`models` → `validators` → `scoring` → `fine_tuners` → `engines` → `postprocessors` →
+`persistence` → `reporters`+`tracking` → `interfaces` **(tümü yazıldı — v1 iskelet tam).**
 
 ## Yol haritası
 
