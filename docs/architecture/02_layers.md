@@ -41,14 +41,23 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
 - **Model eğitmez, fit etmez.** Düşük güven → WARNING, akış durmaz.
 - `statsmodels` yok: `stationarity_pvalue=None` (v1); KH şeması → SBC + uyarı (takip).
 
-## dynamics/  (veriye-özel strateji — ADR 0007)
-- `planner.py` — **Girdi:** `DataProfile` + `TaskSpec` + `RunConfig` · **Çıktı:** `AdaptivePlan`
-  (deterministik katalog seçimi; kod üretmez; **fit yok**)
-- `recipes/` — custom transform kayıt yeri; `preprocessors` arayüzüne uyan sınıflar
-  (v1: elle yazılır). `AdaptivePlan` bunlara `recipe:"<ad>"` ile referans verir.
-- `synthesis.py` — **v2:** LLM recipe üretir → `engines/runners` (Subprocess/Container)
-  içinde doğrular → `recipes/`'e kaydeder. v1'de yok.
-- Custom kod modele değil, pipeline'a girer; fit yalnız train fold'unda (`validators`).
+## dynamics/  (veriye-özel strateji — ADR 0007/0010/0015, KOD YAZILDI)
+- `planner.build_plan(DataProfile, TaskSpec, RunConfig) -> AdaptivePlan` (deterministik; **fit yok**)
+  - `committed_ops`: yapısal drop (constant/duplicate/id/text) · `date_expand` · `encode`
+    (kardinaliteye göre onehot/target_encode) · `impute` · `recipe:<ad>` refleri
+  - `candidate_ops`: `heavy_tailed_numeric` + `target` grupları (log1p/yeo_johnson/quantile —
+    HPO uzayında; hedef negatifse log1p elenir)
+  - `structure`: auto → forecasting + group_col + yeterli seri/geçmiş ise `per_group_champion`
+  - `row_policies`: `intermittent_augment:<class>` (havuz genişletir), `filter_low_activity`,
+    `coldstart_split` · `regimes`: scenario_2 aktifse trend/volatility/joint
+  - `family_policy`: gbdt/forest→minimal, linear/neural→full
+- `recipes/` — registry: `@register_recipe` · `RunConfig.dynamics.recipes` +
+  `load_recipe_paths` · entry-points `autoragml.recipes`. İsim çakışması → `RecipeError`.
+  `planner` recipe adlarını **plan zamanında** doğrular (fail-fast).
+- `autoragml/transform.py` — `Transform` / `FittedTransform` protokolleri (ADR 0011);
+  `preprocessors` ve `recipes` buna uyar.
+- `synthesis.py` — v2 (LLM recipe üretimi); v1'de boş.
+- `RunConfig.dynamics` (`DynamicsConfig`).
 
 ## preprocessors/  (ADR 0011 — leakage-safe by construction)
 - **Girdi:** `AdaptivePlan` (`committed_ops` + seçilmiş `candidate_ops`) + train fold

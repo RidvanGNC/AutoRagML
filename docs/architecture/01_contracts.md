@@ -42,6 +42,7 @@ Serialize edilebilir (pydantic v2). **Sır taşımaz** — yalnız `*_env` adlar
 | `guardrails` | obj | `{enabled: true}` | eşikler `scoring` varsayılanından |
 | `engines` | obj \| None | `None` | aktif engine + override; `None` → analyzers seçer |
 | `analyzers` | `AnalyzerConfig` | varsayılan | ADR 0010 eşikleri: `thresholds` + `timeseries` + `profiling_sample_rows` |
+| `dynamics` | `DynamicsConfig` | varsayılan | ADR 0007/0015: `structure`, per-group eşikleri, transform seçenekleri, kodlama, `recipes[]`, `drop_leakage_suspects` |
 | `tracking.backend` | enum | `"jsonl"` | none \| jsonl \| mlflow |
 | `tracking.uri_env` | `str \| None` | `None` | mlflow için env-var **adı** |
 | `llm` | obj \| None | `None` | v2. `{provider, model, endpoint_env, api_key_env}` — sır yok |
@@ -203,8 +204,10 @@ Frozen, salt-okunur:
 train_span · seed · provenance="train"`.
 Test/full veriye, split nesnesine erişim **yok**.
 
-### FittedTransform protokolü  (`preprocessors` + `dynamics/recipes` — ADR 0011)
-Sızıntı yapısal olarak engellenir. Üç ayrı ilkel:
+### FittedTransform protokolü  (`autoragml/transform.py` — ADR 0011)
+`Transform` / `FittedTransform` protokolleri (`typing.Protocol`). `preprocessors` katalog
+transformları ve `dynamics/recipes` custom transformlar buna uyar. Sızıntı yapısal olarak
+engellenir. Üç ayrı ilkel:
 - **stateless** `transform(X) -> X'` — parametre öğrenmez
 - **`fit(train_frame, ctx: PlanContext) -> FittedTransform`** — yalnız `provenance == "train"`
   frame'den öğrenir; **immutable** nesne döndürür; split'ler arası yeniden kullanılamaz

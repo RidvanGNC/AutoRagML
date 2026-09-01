@@ -9,6 +9,15 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 ## [Unreleased]
 
 ### Eklendi
+- **`dynamics/` katmanı kodlandı** (ADR 0007+0010+0015): `build_plan(DataProfile, TaskSpec, RunConfig) -> AdaptivePlan`.
+  - `planner.py` — `committed_ops` (yapısal drop / date_expand / encode-by-cardinality / impute / recipe refleri) + `candidate_ops` (heavy_tailed_numeric + target grupları; hedef negatifse log1p elenir) + `structure` auto (per_group_champion eşiği) + `row_policies` (intermittent_augment/filter_low_activity/coldstart_split) + `regimes` (scenario_2) + `family_policy`
+  - `recipes/` — registry: `@register_recipe` + `load_recipe_paths` + entry-points (`autoragml.recipes`); isim çakışması → `RecipeError`; `validate_recipes` plan-zamanı fail-fast
+  - `autoragml/transform.py` — `Transform` / `FittedTransform` protokolleri (ADR 0011) + `StatelessFitted`
+- `RunConfig.dynamics` (`DynamicsConfig`); `exceptions.RecipeError`.
+- `tests/unit/dynamics/` — 16 test.
+
+### Değişti
+- `01_contracts.md`: FittedTransform protokolü `autoragml/transform.py`'a taşındı (contracts pandas'a bağlanmasın diye).
 - **`analyzers/` katmanı kodlandı** (ADR 0010): `analyze(dataset, config) -> (DataProfile, TaskSpec)`.
   - `modality.py` — hint/time_col/layout/datetime-dup ile tablo↔zaman serisi
   - `profiling.py` — `ColumnProfile` (raw_dtype + special_types + semantic_role + flags + duplicate_of), numpy skew/kurtosis, `TargetSummary`

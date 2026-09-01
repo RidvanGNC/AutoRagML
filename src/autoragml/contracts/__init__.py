@@ -33,6 +33,7 @@ from autoragml.contracts.data_profile import (
     TimeSeriesProfile,
 )
 from autoragml.contracts.dataset import Dataset, DatasetShape, DataSource
+from autoragml.contracts.dynamics_config import DynamicsConfig
 from autoragml.contracts.engine_result import EngineResult
 from autoragml.contracts.model_bundle import BundleMetadata, ModelBundle
 from autoragml.contracts.plan_context import PlanContext
@@ -88,6 +89,7 @@ __all__ = [
     "DataSource",
     "Dataset",
     "DatasetShape",
+    "DynamicsConfig",
     "EngineResult",
     "EnvInfo",
     "FoldReport",
