@@ -14,6 +14,7 @@ from autoragml.contracts._base import Contract
 from autoragml.contracts.analyzer_config import AnalyzerConfig
 from autoragml.contracts.dynamics_config import DynamicsConfig
 from autoragml.contracts.enums import (
+    HpoBackend,
     HpoLevel,
     Modality,
     SelectionRule,
@@ -121,6 +122,7 @@ class RunConfig(Contract):
     # --- modelleme ---
     scenarios: list[str] = Field(default_factory=lambda: ["scenario_1"])
     hpo_level: HpoLevel = HpoLevel.LIGHT
+    hpo_backend: HpoBackend = HpoBackend.RANDOM_SEARCH
     primary_metric: str | None = None
     metric_by_class: dict[str, str] | None = None
     selection_rule: SelectionRule = SelectionRule.ONE_STD_ERR

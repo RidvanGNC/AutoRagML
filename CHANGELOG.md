@@ -9,6 +9,15 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 ## [Unreleased]
 
 ### Eklendi
+- **`fine_tuners/` katmanı kodlandı** (ADR 0013): `validators.Tuner` protokolünü gerçekler.
+  - `random_search.py` — `RandomSearchTuner`: random search + `Candidate.fidelity` varsa **Successive Halving** (`halving.py`, eta=3, doğrulanmış formül). Kooperatif bütçe + ADR 0008/1 projeksiyon uyarısı
+  - `optuna_backend.py` — `OptunaTuner` (TPE, `[hpo]` extra). v1: sabit fidelity (ara-adım pruning callback v1.1)
+  - `inner_eval.py` — `build_inner_splits` + `evaluate_trial` (yalnız dış-fold train içinde)
+  - `space.py` — `SearchDim` örnekleme; `resolve_tuner(config)` (level+backend)
+- `RunConfig.hpo_backend` (`HpoBackend`); `TunerOutcome.tuning_result` (`contracts.TuningResult`).
+- `validators/frame_ops.py` — paylaşılan fold-frame yardımcıları (runner + fine_tuners).
+- Dev dep: `optuna` (backend testleri için).
+- `tests/unit/fine_tuners/` — 14 test.
 - **`validators/` katmanı kodlandı** (ADR 0010/6 + 0011 + 0013): split sınırını yöneten tek yer.
   - `splitters.py` — Holdout / KFold / StratifiedKFold / GroupKFold / **RollingOrigin** (genişleyen train, sabit horizon, zaman sızıntısı yok) / FixedWindow + `resolve_splitter` (`split_policy` kısmi override + görev tabanlı; küçük veri → holdout)
   - `runner.py` — nested CV: `Tuner.tune` iç resample (`DefaultTuner` = plan varsayılanları, `nested=False`) → `FeaturePipeline.fit_transform(train)` + `apply(test)` → `TargetTransform` fit(train_y) → `build_estimator` + fold-içi iç-val early stopping (lightgbm/sklearn-HGB) → `compute_metrics`. OOF metrik + fold'lar arası SE. `run_validation_suite` (aynı split, çöken aday atlanır)

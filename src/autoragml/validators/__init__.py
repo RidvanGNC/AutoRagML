@@ -10,6 +10,14 @@
 
 from __future__ import annotations
 
+from autoragml.validators.frame_ops import (
+    column_roles,
+    fit_estimator,
+    inner_holdout_split,
+    reserved_columns,
+    split_xy,
+    target_transform_choice,
+)
 from autoragml.validators.leakage_checks import check_fold_leakage, merge_leakage
 from autoragml.validators.runner import (
     DefaultTuner,
@@ -33,8 +41,14 @@ __all__ = [
     "Tuner",
     "TunerOutcome",
     "check_fold_leakage",
+    "column_roles",
+    "fit_estimator",
+    "inner_holdout_split",
     "merge_leakage",
+    "reserved_columns",
     "resolve_splitter",
     "run_validation",
     "run_validation_suite",
+    "split_xy",
+    "target_transform_choice",
 ]

@@ -85,17 +85,21 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
   lightgbm (çekirdek) · xgboost/catboost (ops.) · Dummy baseline'lar ·
   statsforecast AutoARIMA/ETS/Theta/MSTL/Croston/TSB (ops. `[timeseries]`) — TS engine tüketir
 
-## fine_tuners/  (ADR 0013 — ensemble-öncelikli, multi-fidelity)
-- **Girdi:** `Candidate` + train (iç resample) + `budget`
-- **Çıktı:** `TuningResult`
-- Backend: `RandomSearch` (çekirdek) + SH/Hyperband zamanlayıcı · `Optuna` (`[hpo]`,
-  HyperbandPruner) · `FLAML` CFO/BlendSearch (ops.)
-- `hpo_level`: `none` (sadece ensemble) · `light` (**default**, ~15 trial + pruning) · `thorough`
-- Fidelity: `Candidate.fidelity` (GBM→n_estimators / büyük veri→subsample / erken rung→az fold)
-- Early stopping: **fold-içi iç-val** (train'den `early_stopping_fraction`, TS'de son parça) —
-  ADR 0011 uyumlu; opt-in CV-ES küçük veride
-- **Yalnız iç resample'da çalışır** (dış test'e dokunmaz — ADR 0010/6)
-- Per-candidate timeout enforce (ADR 0014/6)
+## fine_tuners/  (ADR 0013 — ensemble-öncelikli, multi-fidelity, KOD YAZILDI)
+- **Girdi:** `validators.Tuner` protokolü (candidate + dış-fold train frame + plan + config)
+- **Çıktı:** `TunerOutcome` (`best_params`, `candidate_choices`, `nested`, `TuningResult`)
+- `resolve_tuner(config)` → `hpo_level=none`→`DefaultTuner`; `light`→`RandomSearchTuner`
+  (1 iç holdout); `thorough`→3-fold iç CV; `hpo_backend=optuna`→`OptunaTuner`
+- `random_search.py` — random search + `Candidate.fidelity` varsa **Successive Halving**
+  (`halving.py`: eta=3, her rung bütçe ×eta / hayatta kalan ÷eta). Bütçe kooperatif;
+  ilk deneme sonrası projeksiyon uyarısı (ADR 0008/1)
+- `optuna_backend.py` — TPE sampler (`[hpo]` extra). **v1 sınırı:** ara-adım `trial.report`
+  yok → sabit fidelity (gerçek pruning callback v1.1)
+- `inner_eval.py` — `build_inner_splits` + `evaluate_trial` (feature pipeline + target
+  transform + estimator, **yalnız dış-fold train içinde**; higher-is-better metrik negatiflenir)
+- `space.py` — `SearchDim` → değer (int/float/loguniform/categorical)
+- Paylaşılan fold-frame yardımcıları `validators/frame_ops.py`
+- `RunConfig.hpo_backend` (`HpoBackend`)
 
 ## validators/  (ADR 0010/6 + 0011 — split sınırını yöneten TEK yer, KOD YAZILDI)
 - **Girdi:** `Candidate` + frame + `AdaptivePlan` + `DataProfile` + `TaskSpec` + `RunConfig`

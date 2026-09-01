@@ -17,15 +17,22 @@ import pandas as pd
 from autoragml.contracts.adaptive_plan import AdaptivePlan
 from autoragml.contracts.candidate import Candidate
 from autoragml.contracts.data_profile import DataProfile
-from autoragml.contracts.enums import SemanticRole, Task
 from autoragml.contracts.plan_context import PlanContext
 from autoragml.contracts.run_config import RunConfig
 from autoragml.contracts.task_spec import TaskSpec
+from autoragml.contracts.tuning import TuningResult
 from autoragml.contracts.validation import FoldReport, ValidationReport
 from autoragml.logging import get_logger
 from autoragml.models import build_estimator
 from autoragml.preprocessors import FeaturePipeline, TargetTransform
 from autoragml.scoring.metrics import compute_metrics
+from autoragml.validators.frame_ops import (
+    column_roles,
+    fit_estimator,
+    reserved_columns,
+    split_xy,
+    target_transform_choice,
+)
 from autoragml.validators.leakage_checks import check_fold_leakage, merge_leakage
 from autoragml.validators.splitters import Fold, Splitter, resolve_splitter
 
@@ -42,6 +49,7 @@ class TunerOutcome:
     candidate_choices: dict[str, str] = field(default_factory=dict)
     best_iteration: int | None = None
     nested: bool = False
+    tuning_result: TuningResult | None = None
 
 
 class Tuner(Protocol):
@@ -74,83 +82,6 @@ class DefaultTuner:
         return TunerOutcome(candidate_choices=choices, nested=False)
 
 
-def _reserved_columns(task: TaskSpec) -> set[str]:
-    return {c for c in (task.time_col, task.group_col, *task.targets) if c}
-
-
-def _column_roles(profile: DataProfile) -> dict[str, SemanticRole]:
-    return {c.name: c.semantic_role for c in profile.columns}
-
-
-def _xy(frame: pd.DataFrame, reserved: set[str], target: str) -> tuple[pd.DataFrame, _Arr]:
-    y = np.asarray(pd.to_numeric(frame[target], errors="coerce"), dtype=np.float64)
-    drop = [c for c in reserved if c in frame.columns]
-    x = frame.drop(columns=drop)
-    numeric = x.select_dtypes(include=["number", "bool"])
-    if numeric.shape[1] < x.shape[1]:
-        dropped = sorted(set(x.columns) - set(numeric.columns))
-        logger.warning("[validators] sayısal olmayan kolonlar X'ten düşürüldü: %s", dropped)
-    return numeric.apply(pd.to_numeric, errors="coerce").fillna(0.0), y
-
-
-def _target_choice(plan: AdaptivePlan, outcome: TunerOutcome) -> str:
-    for group in plan.candidate_ops:
-        if group.group_name == "target":
-            return outcome.candidate_choices.get("target", group.default)
-    return "none"
-
-
-def _inner_val_split(
-    n: int, frac: float, is_time_ordered: bool
-) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]:
-    n_val = max(1, int(round(n * frac)))
-    if is_time_ordered:
-        return np.arange(n - n_val), np.arange(n - n_val, n)
-    rng = np.random.default_rng(0)
-    perm = rng.permutation(n)
-    return perm[n_val:], perm[:n_val]
-
-
-def _fit_estimator(
-    est: Any,
-    candidate: Candidate,
-    x: pd.DataFrame,
-    y: _Arr,
-    config: RunConfig,
-    task: TaskSpec,
-) -> int | None:
-    """Fit + (destekleniyorsa) fold-içi iç-val early stopping. Döner: best_iteration."""
-    module = type(est).__module__
-    if not candidate.supports_early_stopping or len(x) < 30:
-        est.fit(x, y)
-        return None
-
-    rounds = candidate.early_stopping_rounds or 50
-    frac = config.validation.early_stopping_fraction
-    is_ts = task.task is Task.FORECASTING
-    tr_idx, val_idx = _inner_val_split(len(x), frac, is_ts)
-    x_tr, x_val = x.iloc[tr_idx], x.iloc[val_idx]
-    y_tr, y_val = y[tr_idx], y[val_idx]
-
-    if module.startswith("lightgbm"):
-        import lightgbm as lgb
-
-        est.fit(
-            x_tr,
-            y_tr,
-            eval_X=x_val,
-            eval_y=y_val,
-            callbacks=[lgb.early_stopping(rounds, verbose=False)],
-        )
-        return int(getattr(est, "best_iteration_", 0)) or None
-    if module.startswith("sklearn.ensemble") and hasattr(est, "set_params"):
-        est.set_params(early_stopping=True, validation_fraction=frac, n_iter_no_change=rounds)
-        est.fit(x, y)
-        return int(getattr(est, "n_iter_", 0)) or None
-    est.fit(x, y)
-    return None
-
-
 def run_validation(
     candidate: Candidate,
     frame: pd.DataFrame,
@@ -170,8 +101,8 @@ def run_validation(
     splitter = splitter or resolve_splitter(work, config, task, profile)
     folds: list[Fold] = splitter.split(work)
 
-    reserved = _reserved_columns(task)
-    roles = _column_roles(profile)
+    reserved = reserved_columns(task)
+    roles = column_roles(profile)
     target = task.targets[0]
 
     fold_reports: list[FoldReport] = []
@@ -204,13 +135,13 @@ def run_validation(
 
         all_violations.extend(check_fold_leakage(work, fold, task, fitted_pipe))
 
-        x_train, y_train = _xy(train_t, reserved, target)
-        x_test, y_test = _xy(test_t, reserved, target)
+        x_train, y_train = split_xy(train_t, reserved, target)
+        x_test, y_test = split_xy(test_t, reserved, target)
         x_test = x_test.reindex(columns=x_train.columns, fill_value=0.0)
 
-        tt = TargetTransform(_target_choice(plan, outcome)).fit(y_train)
+        tt = TargetTransform(target_transform_choice(plan, outcome.candidate_choices)).fit(y_train)
         est = build_estimator(candidate, task.task, outcome.best_params)
-        best_iter = _fit_estimator(est, candidate, x_train, tt.forward(y_train), config, task)
+        best_iter = fit_estimator(est, candidate, x_train, tt.forward(y_train), config, task)
 
         y_pred = tt.inverse(np.asarray(est.predict(x_test), dtype=np.float64))
         metrics = compute_metrics(y_test, y_pred, task.task)
