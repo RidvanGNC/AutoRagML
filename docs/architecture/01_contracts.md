@@ -40,12 +40,18 @@ olmadan katmanlar birbirine sızar. Sıra: contracts → config → io → analy
 - `modality`: tabular | timeseries | (v1.1+ text|image|audio|mixed)
 - `targets[]`, `horizon?`, `group_col?`, `time_col?`
 
-### AdaptivePlan  (`dynamics/` üretir)
-- `column_ops`: kolon → [op] (target_encode, hashing, winsorize, log1p, date_expand,
-  text_embed, drop, impute:<strategy>)
-- `row_policies`: [filter_low_activity, coldstart_split, intermittent_route:<pipeline>]
+### AdaptivePlan  (`dynamics/planner.py` üretir — deterministik, ADR 0007)
+Deklaratif ve serialize edilebilir (sözlük). Kod taşımaz; **referans** taşır.
+- `column_ops`: kolon → [op]. Op iki tür:
+  - **katalog op** (sabit): `target_encode`, `hashing`, `winsorize`, `log1p`,
+    `date_expand`, `text_embed`, `drop`, `impute:<strategy>`
+  - **recipe referansı**: `recipe:"<registry_adı>"` → `dynamics/recipes/` içinde kayıtlı,
+    `preprocessors` arayüzüne uyan custom transform (v1: elle yazılır; v2: `synthesis.py` üretir)
+- `row_policies`: [`filter_low_activity`, `coldstart_split`, `intermittent_route:<pipeline>`]
 - `structure`: `{ pooled | per_group_champion }`, `target_transform?`
-- `regimes?`: senaryo/regime tanımları (fold-güvenli fit edilir)
+- `regimes?`: senaryo/regime tanımları — **fit'i `validators` yönetir** (fold-güvenli),
+  plan yalnız tanımı taşır
+- `recipes_used[]`: bu planın referansladığı recipe adları (RunManifest'e girer)
 
 ### Candidate (ModelSpec)  (`models/` + `registry/` üretir)
 - `key`, `factory(params) -> estimator`, `param_space`, `family`
@@ -78,9 +84,19 @@ olmadan katmanlar birbirine sızar. Sıra: contracts → config → io → analy
 - `artifacts`: tüm çıktı yolları
 - `autoragml_version`
 
+### Recipe (custom transform)  (`dynamics/recipes/` — ADR 0007)
+`preprocessors` ile aynı arayüz; ayrı contract nesnesi değil, bir **protokol**:
+- `fit(train_df, plan_ctx) -> self`
+- `transform(X) -> X'`
+- `get_params()` / serialize (joblib) — `ModelBundle`'a girer
+- registry'ye isimle kayıtlı; `AdaptivePlan.column_ops` içinden `recipe:"<ad>"` ile çağrılır
+- v1: insan yazar · v2: `dynamics/synthesis.py` (LLM) üretir, runner'da doğrular, kaydeder
+
 ## Açık sorular
 
-- `dynamics` sınırı: strateji/policy katmanı mı, yoksa `models/` içine gömülü kod mu?
-- `AdaptivePlan` ne kadar deklaratif olmalı (serialize edilebilir sözlük) vs. kod nesnesi?
-- Fold-güvenli regime fit → `AdaptivePlan` mı taşır, `validators` mı yönetir?
+- ~~`dynamics` sınırı~~ → **çözüldü: ADR 0007** (planner + recipes + v2 synthesis)
+- ~~`AdaptivePlan` deklaratif mi kod mu~~ → **çözüldü: deklaratif sözlük, recipe referansı taşır**
+- ~~Fold-güvenli regime fit kim yönetir~~ → **çözüldü: `validators` fit eder, plan tanımı taşır**
+- `plan_ctx`: recipe'e `fit` sırasında hangi bağlam verilir (group_col, time_col, target)?
+- Recipe registry: yalnız `dynamics/recipes/` klasörü mü, yoksa entry-points ile dış paket de mi?
 - Karışık modalite (v1.1+) `TaskSpec.modality = mixed` → çok engine + füzyon nasıl?

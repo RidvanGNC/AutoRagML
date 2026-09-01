@@ -24,12 +24,14 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
   seasonality, ADI/CV² intermittency, regime ipuçları)
 - **Model eğitmez.**
 
-## dynamics/  (veriye-özel strateji)
-- **Girdi:** `DataProfile` + `TaskSpec` + `RunConfig`
-- **Çıktı:** `AdaptivePlan`
-- Kolon işlemleri, satır politikaları, yapısal seçim (pooled vs per-group champion),
-  hedef dönüşümü, regime tanımı
-- **Fit yok** — karar üretir; fit'i `preprocessors`/`validators` yapar
+## dynamics/  (veriye-özel strateji — ADR 0007)
+- `planner.py` — **Girdi:** `DataProfile` + `TaskSpec` + `RunConfig` · **Çıktı:** `AdaptivePlan`
+  (deterministik katalog seçimi; kod üretmez; **fit yok**)
+- `recipes/` — custom transform kayıt yeri; `preprocessors` arayüzüne uyan sınıflar
+  (v1: elle yazılır). `AdaptivePlan` bunlara `recipe:"<ad>"` ile referans verir.
+- `synthesis.py` — **v2:** LLM recipe üretir → `engines/runners` (Subprocess/Container)
+  içinde doğrular → `recipes/`'e kaydeder. v1'de yok.
+- Custom kod modele değil, pipeline'a girer; fit yalnız train fold'unda (`validators`).
 
 ## preprocessors/
 - **Girdi:** `AdaptivePlan` + train fold

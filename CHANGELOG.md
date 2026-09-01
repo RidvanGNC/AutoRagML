@@ -9,7 +9,12 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 ## [Unreleased]
 
 ### Eklendi
-- (tasarım aşaması)
+- ADR 0007: `dynamics` = deterministik `planner` + custom `recipes/` plug-point + v2 `synthesis`.
+- `dynamics/` alt iskele: `planner.py`, `recipes/`, `synthesis.py` (docstring stub).
+
+### Değişti
+- `docs/architecture/01_contracts.md`: `AdaptivePlan` artık recipe referansı taşıyor; 3 açık soru ADR 0007 ile kapandı.
+- `docs/architecture/02_layers.md`: `dynamics/` bölümü ADR 0007'ye göre güncellendi.
 
 ## [0.0.1] - 2026-09-01
 
