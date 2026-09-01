@@ -29,20 +29,27 @@ tasarımda şimdi düşünülür; v1 kapsamı gereksiz şişirilmez.
 5. **Çapraz platform.** Çekirdek: numpy, pandas, pyarrow, scikit-learn, lightgbm,
    pydantic, joblib, pyyaml. Ağır DL/serimonik bağımlılıklar opsiyonel extra.
 
-## Uçtan uca akış (v1)
+## Uçtan uca akış (v1) — ADR 0015
 
 ```
-Dataset (io)
-  └─ analyzers ──────────► DataProfile + TaskSpec
-       └─ dynamics ──────► AdaptivePlan
-            └─ engine (tabular | timeseries)
-                 ├─ models + registry ──► [Candidate...]
-                 ├─ her Candidate: fine_tuners ──► validators ──► ValidationReport
-                 ├─ scoring ──► ScoreBoard (+ guardrail) ──► SelectionResult
-                 ├─ champion refit (tüm veri) ──► ModelBundle
-                 └─ postprocessors eklenir
-  └─ persistence ──► RunManifest + outputs/<DDMMYYYY>_<proje>_outputs/<run_id>/
-  └─ reporters ────► EDA / model card / karşılaştırma / grafik
+config.resolve -> RunConfig
+io.load        -> Dataset            [strict fingerprint]
+analyzers      -> DataProfile + TaskSpec   [+ warnings]
+engine seçimi  (modalite)
+  her engine (EngineRunner):
+    dynamics.planner  -> AdaptivePlan
+    registry.resolve  -> [Candidate]           (YAML katalog)
+    validators (nested CV):
+       iç resample: fine_tuners.tune  -> TuningResult   (candidate_ops HPO uzayında)
+       FittedTransform.fit(train, PlanContext) -> model fit + early stop -> apply(test)
+       -> ValidationReport            [leakage: overlap/preprocessing/multi_test]
+    scoring  -> ScoreBoard + SelectionResult   (seçim yalnız OOF; 1-SE kuralı)
+    şampiyon refit (tüm train) + postprocessors -> ModelBundle
+    -> EngineResult
+final holdout (varsa): şampiyon BİR KEZ skorlanır
+persistence -> RunManifest + outputs/<DDMMYYYY>_<proje>_outputs/<run_id>/
+reporters   -> EDA / model card / karşılaştırma / grafik
+-> RunResult  (.leaderboard / .predict / .explain / .champion / .manifest)
 ```
 
 ## Katman sorumlulukları

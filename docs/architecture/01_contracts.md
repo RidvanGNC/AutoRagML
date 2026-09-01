@@ -118,8 +118,10 @@ Deklaratif, serialize edilebilir. Kod taşımaz; **referans** taşır.
 
 - **`committed_ops`**: kolon → [op], **her zaman uygulanır** (yapısal):
   `drop` (constant/duplicate/all-null/monotonic-id), `date_expand`, kategorik `encode`
-- **`candidate_ops`**: kolon/hedef → [op seçenekleri], **CV ile seçilir** (ADR 0010):
-  `log1p | yeo_johnson | quantile | none`; hedef dönüşümü `TransformedTargetRegressor` sarımı
+- **`candidate_ops`**: muamele-sınıfı → [op seçenekleri], **HPO uzayında seçilir** (ADR 0015):
+  `log1p | yeo_johnson | quantile | none`; hedef dönüşümü `TransformedTargetRegressor` sarımı.
+  `planner` kolonları sınıfa göre **gruplar** (patlama önleme); HPO değeri seçer;
+  `hpo_level: none` → `family_policy` sabit varsayılan
 - **recipe referansı**: `committed_ops`/`candidate_ops` içinde `recipe:"<ad>"` →
   `dynamics/recipes/` kayıtlı custom transform (`FittedTransform` protokolü, ADR 0011)
 - `row_policies`: `filter_low_activity`, `coldstart_split`, `intermittent_augment:<class>`
@@ -171,23 +173,47 @@ Deklaratif, serialize edilebilir. Kod taşımaz; **referans** taşır.
   `best_iteration` (ES modelleri için sabit), `provenance_fitted_on`
 - `champion_info`, `metrics` (OOF + final holdout — bir kez)
 
-### RunManifest  (`persistence/` üretir)
-- `run_id`, `created_at`, `project_name`
-- `input_fingerprint`, `config_snapshot`
-- `env`: paket sürümleri, python, platform, git commit
-- `artifacts`: tüm çıktı yolları
-- `autoragml_version`
+### RunManifest  (`persistence/` üretir — ADR 0015)
+- `run_id` (zaman-tabanlı, sıralanabilir), `created_at`, `project_name`, `autoragml_version`
+- `input_fingerprint` (strict), `config_snapshot` (RunConfig, sırlar maskeli)
+- `env`: python, platform/OS, anahtar paket sürümleri, git commit (repo ise)
+- `data_snapshot`: n_rows/n_cols, tarih aralığı, target özeti, `layout`
+- `seed`
+- `timeline[]`: `{ stage, start, end, status }` — hangi faz kırıldı
+- `artifacts`: `{ ad: yol }`
+- `champion_ref`: `ModelBundle` işaretçisi
+- `realized_seconds`, `n_candidates`
+- `warnings[]`: tüm WARNING'ler (düşük güven, leakage şüphesi, wide degradasyon, runtime projeksiyon)
+
+### EngineResult  (engine → `Orchestrator` — ADR 0015)
+- `engine_key`
+- `scoreboard: ScoreBoard`, `selection: SelectionResult`, `champion: ModelBundle`
+- `validation_reports_ref`
+- `data_profile`, `task_spec`, `adaptive_plan` (engine kararları)
+- `status`: `SUCCESS | PARTIAL | FAILED`, `messages[]`
+
+### RunResult  (`interfaces/api.py` — kullanıcıya dönen — ADR 0015)
+`EngineResult` + `RunManifest` sarımı + kolaylık metotları:
+`.leaderboard()`, `.predict(X)`, `.explain()`, `.champion`, `.manifest`, `.reports_dir`
+
+### PlanContext  (`FittedTransform.fit` 2. arg — ADR 0011 + 0015)
+Frozen, salt-okunur:
+`target · group_col · time_col · task · column_roles (semantic_role dict) · fold_id ·
+train_span · seed · provenance="train"`.
+Test/full veriye, split nesnesine erişim **yok**.
 
 ### FittedTransform protokolü  (`preprocessors` + `dynamics/recipes` — ADR 0011)
 Sızıntı yapısal olarak engellenir. Üç ayrı ilkel:
 - **stateless** `transform(X) -> X'` — parametre öğrenmez
-- **`fit(train_frame) -> FittedTransform`** — yalnız `provenance == "train"` frame'den
-  öğrenir; **immutable** nesne döndürür; split'ler arası yeniden kullanılamaz
-- **`apply(X) -> X'`** — öğrenilmiş parametreyi uygular, saf
+- **`fit(train_frame, ctx: PlanContext) -> FittedTransform`** — yalnız `provenance == "train"`
+  frame'den öğrenir; **immutable** nesne döndürür; split'ler arası yeniden kullanılamaz
+- **`apply(X) -> X'`** — öğrenilmiş parametreyi uygular, saf (ek bağlam almaz)
 - `provenance_fitted_on` kaydı; `serialize()` → `ModelBundle`
 - `fit`'i **yalnız `validators`** çağırır (fold içinde); kullanıcı/recipe kodu split
   sınırını görmez
-- registry'ye isimle kayıtlı; `AdaptivePlan` içinden `recipe:"<ad>"` ile çağrılır
+- registry: `dynamics/recipes/` (`@register_recipe`) · `RunConfig.recipe_paths` (proje-yerel
+  dizin) · entry-points (`autoragml.recipes`). Tek registry; isim çakışması → **açık hata**
+- `AdaptivePlan` içinden `recipe:"<ad>"` ile çağrılır
 - v1: insan yazar · v2: `dynamics/synthesis.py` (LLM) üretir → runner'da doğrular → kaydeder
 
 ### Frame provenance  (tüm katmanlar)
@@ -204,7 +230,19 @@ partition'a `apply`'ı → hata (ADR 0011/3-4).
 - ~~`dynamics` metodoloji (skew ile eleme?)~~ → **çözüldü: ADR 0010** (betimle→karar→fold'da fit; committed vs candidate ops)
 - ~~intermittency routing~~ → **çözüldü: ADR 0010** (ipucu — havuz genişletir + metrik; router değil)
 - ~~sızıntı önleme~~ → **çözüldü: ADR 0011** (fit/transform/apply, immutable, provenance, 3-kategori)
-- `plan_ctx`: recipe'e `fit` sırasında hangi bağlam verilir (group_col, time_col, target)?
-- Recipe registry: yalnız `dynamics/recipes/` klasörü mü, yoksa entry-points ile dış paket de mi?
-- `candidate_ops` seçim algoritması: her aday için ayrı iç-CV mi, yoksa tek geçişte mi?
+- ~~`plan_ctx` içeriği~~ → **çözüldü: ADR 0015** (`PlanContext` frozen, test/full erişim yok)
+- ~~recipe registry kapsamı~~ → **çözüldü: ADR 0015** (paket + `recipe_paths` + entry-points; çakışma→hata)
+- ~~`candidate_ops` seçim algoritması~~ → **çözüldü: ADR 0015** (HPO arama uzayında, gruplu)
 - Karışık modalite (v1.1+) `TaskSpec.modality = mixed` → çok engine + füzyon nasıl?
+- Engine-arası ensemble (v1.1) — birden çok `EngineResult`'ı birleştirme
+
+---
+
+## Durum: sözleşmeler DONDU → kodlama başlıyor
+
+`RunConfig · Dataset · ColumnProfile/DataProfile/TimeSeriesProfile · TaskSpec ·
+AdaptivePlan · PlanContext · FittedTransform · Candidate · TuningResult ·
+ValidationReport · ScoreBoard/SelectionResult · ModelBundle · EngineResult ·
+RunManifest · RunResult` — hepsi donduruldu.
+
+Sıradaki: `src/autoragml/contracts/*.py` pydantic v2 modelleri + `tests/contract/`.

@@ -93,11 +93,16 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
 - **Seçim yalnız OOF/validation**; test'e tek dokunuş `engines`'te; `noise_floor`
   (metrik SE), `selection_bias_bound` σ√(2 ln K), `realized_seconds` + K raporlanır
 
-## engines/
+## engines/  (ADR 0015 — orkestrasyon)
 - **Girdi:** `Dataset` + `RunConfig` + `DataProfile` + `TaskSpec`
-- **Çıktı:** `EngineResult` (ScoreBoard + champion `ModelBundle`)
+- **Çıktı:** `EngineResult`
+- İç akış: `dynamics.planner` → `registry.resolve` → `validators` (nested CV) →
+  `scoring` (OOF seçim) → şampiyon refit (tüm train) + postprocessors → `ModelBundle`
 - `tabular/core_engine`, `timeseries/core_engine`, opsiyonel `statsforecast_engine`
 - `runners/`: InProcess (varsayılan) | Subprocess | Container/Remote (v2+)
+- Üstünde `Orchestrator` (interfaces/api): config→io→analyzers→engine seçimi→engine(ler)
+  →(çok engine ise en iyi / v1.1 ensemble)→final holdout (bir kez)→persistence→reporters
+  → `RunResult`
 
 ## postprocessors/
 - **Girdi:** ham tahmin + `AdaptivePlan` + business kuralları

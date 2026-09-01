@@ -1,4 +1,5 @@
-"""contracts — katmanlar arası tipli omurga (RunConfig, Dataset, DataProfile, TaskSpec, AdaptivePlan, Candidate, ...). Önce bu dondurulur.
+"""contracts -- katmanlar arasi tipli omurga.
 
-Durum: iskele — sözleşmeler kesinleşmeden implementasyon yok.
+HEPSI DONDU (ADR 0008-0015). Alan tablolari: docs/architecture/01_contracts.md.
+Sonraki adim: bu modullerde pydantic v2 modelleri + tests/contract/.
 """
