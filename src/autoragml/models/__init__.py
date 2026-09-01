@@ -1,4 +1,7 @@
-"""models — base model tanımları + registry. Her giriş bir Candidate üreticisi (factory, param_space, family, modalities, supports_early_stopping).
+"""models -- YAML katalogdan Candidate uretir (ADR 0012).
 
-Durum: iskele — sözleşmeler kesinleşmeden implementasyon yok.
+configs/model_catalog/*.yaml + kullanici override -> registry cozer -> Candidate.
+Eksik dep -> entry atlanir + tek WARNING. Entry-points ikincil.
+
+Durum: iskele.
 """

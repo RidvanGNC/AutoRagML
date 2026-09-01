@@ -1,5 +1,1 @@
-"""contracts.tuning
-
-Durum: taslak. Alanlar mimari dokümanda (docs/architecture/01_contracts.md) tartışılıyor;
-kesinleşmeden pydantic modeli yazılmayacak.
-"""
+"""contracts.tuning -- TuningResult (ADR 0013). best_params/trials/fidelity_schedule/best_iteration_per_fold."""

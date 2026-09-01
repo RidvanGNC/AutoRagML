@@ -9,6 +9,14 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 ## [Unreleased]
 
 ### Eklendi
+- ADR 0012: Model kataloğu **YAML** (`configs/model_catalog/*.yaml`) + registry; `class_path`, `requires`, `search_space`, `fidelity`; kullanıcı override YAML ile.
+- ADR 0013: HPO ensemble-öncelikli + multi-fidelity (SH/Hyperband) + nested; `hpo_level: none|light|thorough`; fold-içi iç-val early stopping.
+- ADR 0014: ScoreBoard + dürüst seçim (Winning by Peeking). Seçim yalnız validation, 1-SE kuralı default, realized wall-clock + K, σ√(2lnK), MCB/Diebold-Mariano opsiyonel.
+- `models/` `fine_tuners/` `scoring/` (metrics·guardrails·selection·comparison_tests) alt iskele; `configs/model_catalog/`.
+
+### Değişti
+- `01_contracts.md`: `Candidate`, `TuningResult`, `ValidationReport`, `ScoreBoard/SelectionResult`, `ModelBundle` **donduruldu**.
+- `02_layers.md`: models / fine_tuners / scoring ADR 0012-0014'e göre güncel.
 - ADR 0010: `analyzers` sözleşmesi + metodoloji. Güncel kaynaklarla doğrulandı (AutoGluon FeatureMetadata, SortingHat, Nixtla tsfeatures, Open Forecast/Kostenko-Hyndman, TransformedTargetRegressor). Metodoloji: betimle→karar ver→fold'da fit; "her şeyi dönüştür sonra skew ile ele" **reddedildi**.
 - ADR 0011: leakage-safe by construction (Grammar of ML Workflows + LeakageDetector). fit/transform/apply ayrımı, immutable `FittedTransform`, `Frame.provenance`, 3-kategori taksonomi (overlap/preprocessing/multi_test), nested CV zorunlu.
 - `analyzers/` alt iskele: `modality/profiling/task_inference/timeseries/quality/leakage`.

@@ -129,13 +129,19 @@ Deklaratif, serialize edilebilir. Kod taşımaz; **referans** taşır.
 - `family_policy`: model ailesine göre op yoğunluğu (ağaç → minimal, lineer → kapsamlı)
 - `recipes_used[]` → RunManifest'e girer
 
-### Candidate (ModelSpec)  (`models/` + `registry/` üretir)
-- `key`, `factory(params) -> estimator`, `param_space`, `family`
-- `modalities[]`, `predict_kind` (point|proba|quantile)
-- `supports_early_stopping`, `wrap` (imputer/scaler gerekli mi)
+### Candidate  (`models/` + `registry/` üretir — katalog YAML'dan, ADR 0012)
+- `key`, `name`, `family`
+- `factory(task, params) -> estimator` (`class_path`'ten; task→Regressor/Classifier map)
+- `modalities[]`, `tasks[]`, `predict_kind[]` (point|proba|quantile)
+- `search_space` (HPO uzayı — katalog YAML), `fidelity` (multi-fidelity ekseni, ADR 0013)
+- `supports_early_stopping`, `early_stopping_rounds`
+- `requires[]` (pip extra — yoksa entry atlanır), `wrap` (imputer/scaler)
+- `source`: `builtin_catalog | user_catalog | entry_point`
 
-### TuningResult  (`fine_tuners/` üretir)
-- `best_params`, `trials[]`, `spent_budget`, `early_stopped`
+### TuningResult  (`fine_tuners/` üretir — ADR 0013)
+- `best_params`, `trials[]`, `spent_budget`, `realized_seconds`
+- `early_stopped`, `best_iteration_per_fold[]`, `fidelity_schedule`
+- `backend`: `random_search | optuna | flaml`, `hpo_level`: `none | light | thorough`
 
 ### ValidationReport  (`validators/` üretir)
 - `folds[]`: `{ fold_id, train_span, test_span, predictions_ref, metrics }`
@@ -145,16 +151,25 @@ Deklaratif, serialize edilebilir. Kod taşımaz; **referans** taşır.
 - `nested`: HPO / `candidate_ops` seçimi iç resample'da yapıldı mı (ADR 0010/6);
   dış fold yalnız skorlar
 
-### ScoreBoard / SelectionResult  (`scoring/` üretir)
-- `rows[]`: `{ model_key, scenario, metrics_mean, guardrail_flags, is_quarantined,
-  selection_eligible, class_weighted_score }`
-- `champion`: `{ model_key, scenario, reason }`
-- `promotion`: `{ passed, reasons[] }`
+### ScoreBoard / SelectionResult  (`scoring/` üretir — ADR 0014, dürüst seçim)
+- `rows[]`: `{ model_key, scenario, oof_metric_mean, oof_metric_se, all_metrics_mean,
+  guardrail_flags, is_quarantined, selection_eligible, class_weighted_score,
+  realized_seconds, n_trials, best_iteration }`
+- `noise_floor`: birincil metrik SE (fold'lar arası)
+- `selection_rule`: `best | one_std_err` (**default `one_std_err`** — 1 SE içindeki en
+  basit/ucuz/sağlam model)
+- `champion`: `{ model_key, scenario, reason, within_1se[], statistical_ties[] }`
+- `selection_bias_bound`: σ·√(2 ln K), `n_candidates`: K
+- `comparison_tests?`: `{ mcb_ranks, dm_pvalues }` (forecasting, opsiyonel)
+- `promotion`: `{ passed, reasons[] }` (mutlak eşikler — DemandSensing)
+- **Seçim yalnız OOF/validation'da**; test'e tek dokunuş `engines`'te enforce, `validators`
+  `multi_test` ihlalini yakalar (ADR 0014/1)
 
 ### ModelBundle  (`persistence/` üretir)
-- `pipeline` (fitted: preprocessors + estimator + postprocessors)
-- `metadata`: feature list + hash, task_spec, adaptive_plan özeti, config snapshot
-- `champion_info`, `metrics`
+- `pipeline` (fitted: `FittedTransform`'lar + estimator + postprocessors) — tüm train'de refit
+- `metadata`: feature list + hash, `task_spec`, `adaptive_plan` özeti, config snapshot,
+  `best_iteration` (ES modelleri için sabit), `provenance_fitted_on`
+- `champion_info`, `metrics` (OOF + final holdout — bir kez)
 
 ### RunManifest  (`persistence/` üretir)
 - `run_id`, `created_at`, `project_name`

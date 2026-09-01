@@ -49,18 +49,28 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
 - `fit`'i **yalnız `validators`** çağırır; split sınırını görmez
 - `provenance_fitted_on` kaydı; `serialize()` → `ModelBundle`
 
-## models/ + registry
-- **Girdi:** `TaskSpec` + `AdaptivePlan` + `RunConfig`
+## models/ + registry  (ADR 0012 — YAML katalog)
+- **Girdi:** `TaskSpec` + `AdaptivePlan` + `RunConfig` + `configs/model_catalog/*.yaml`
+  (+ kullanıcı override YAML)
 - **Çıktı:** `[Candidate]`
-- Tablo/TS: sklearn linear/RF/ET/GBM, lightgbm, xgboost(opsiyonel), catboost(opsiyonel),
-  naive/seasonal-naive/STL baseline
-- registry: entry-points ile dış model eklenebilir
+- registry: YAML okur → `class_path` importable + `requires` kurulu mu → `TaskSpec.task`
+  uyumlu entry'leri `Candidate`'e çevirir; eksik dep → atla + tek WARNING
+- Katalog: sklearn linear/ridge/lasso/RF/ET/GBM · lightgbm · xgboost/catboost(ops.) ·
+  naive/seasonal_naive/trend_naive/stl baseline · statsforecast(ops.) ·
+  Croston/TSB/SBA (intermittent — havuz genişletme)
+- Entry-points = ikincil (üçüncü parti plugin); YAML kanonik
 
-## fine_tuners/
-- **Girdi:** `Candidate` + train/val + `budget`
+## fine_tuners/  (ADR 0013 — ensemble-öncelikli, multi-fidelity)
+- **Girdi:** `Candidate` + train (iç resample) + `budget`
 - **Çıktı:** `TuningResult`
-- Backend: RandomSearch (çekirdek), Optuna (opsiyonel), FLAML-CFO (opsiyonel)
-- Early stopping: (a) model-içi (xgb/lgbm rounds), (b) arama-seviyesi (plateau/bütçe)
+- Backend: `RandomSearch` (çekirdek) + SH/Hyperband zamanlayıcı · `Optuna` (`[hpo]`,
+  HyperbandPruner) · `FLAML` CFO/BlendSearch (ops.)
+- `hpo_level`: `none` (sadece ensemble) · `light` (**default**, ~15 trial + pruning) · `thorough`
+- Fidelity: `Candidate.fidelity` (GBM→n_estimators / büyük veri→subsample / erken rung→az fold)
+- Early stopping: **fold-içi iç-val** (train'den `early_stopping_fraction`, TS'de son parça) —
+  ADR 0011 uyumlu; opt-in CV-ES küçük veride
+- **Yalnız iç resample'da çalışır** (dış test'e dokunmaz — ADR 0010/6)
+- Per-candidate timeout enforce (ADR 0014/6)
 
 ## validators/  (ADR 0010/6 + 0011 — split sınırını yöneten TEK yer)
 - **Girdi:** `Candidate` + `Dataset` + `AdaptivePlan` + split policy
@@ -74,11 +84,14 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
 - `leakage_checks` 3 kategori: `overlap` (satır/zaman örtüşmesi) · `preprocessing`
   (split öncesi fit) · `multi_test` (dış test'te seçim) → **BLOCK**
 
-## scoring/
-- **Girdi:** `[ValidationReport]` + `RunConfig` + (opsiyonel) routing/demand-class
+## scoring/  (ADR 0014 — dürüst seçim)
+- **Girdi:** `[ValidationReport]` (OOF) + `RunConfig` + (opsiyonel) demand-class
 - **Çıktı:** `ScoreBoard` + `SelectionResult`
-- `metrics` (regresyon/sınıflandırma/forecasting/CSL), `guardrails` (quarantine),
-  `selection` (task/sınıf-bazlı metrik önceliği, promotion rules)
+- Alt: `metrics/` · `guardrails.py` (quarantine — DemandSensing) · `selection.py`
+  (**1-SE kuralı** default + class-weighted + promotion rules) · `comparison_tests.py`
+  (MCB / Diebold-Mariano, forecasting, opsiyonel)
+- **Seçim yalnız OOF/validation**; test'e tek dokunuş `engines`'te; `noise_floor`
+  (metrik SE), `selection_bias_bound` σ√(2 ln K), `realized_seconds` + K raporlanır
 
 ## engines/
 - **Girdi:** `Dataset` + `RunConfig` + `DataProfile` + `TaskSpec`

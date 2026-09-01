@@ -1,5 +1,1 @@
-"""contracts.candidate
-
-Durum: taslak. Alanlar mimari dokümanda (docs/architecture/01_contracts.md) tartışılıyor;
-kesinleşmeden pydantic modeli yazılmayacak.
-"""
+"""contracts.candidate -- Candidate (katalog YAML'dan, ADR 0012). Alanlar 01_contracts.md'de dondu."""

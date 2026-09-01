@@ -1,5 +1,5 @@
-"""contracts.scoreboard
+"""contracts.scoreboard -- ScoreBoard + SelectionResult (ADR 0014).
 
-Durum: taslak. Alanlar mimari dokümanda (docs/architecture/01_contracts.md) tartışılıyor;
-kesinleşmeden pydantic modeli yazılmayacak.
+oof_metric_mean/se, noise_floor, selection_rule=one_std_err (default), selection_bias_bound sqrt(2 ln K),
+comparison_tests (MCB/DM opsiyonel), promotion. Dondu.
 """

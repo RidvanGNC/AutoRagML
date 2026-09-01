@@ -1,5 +1,1 @@
-"""contracts.model_bundle
-
-Durum: taslak. Alanlar mimari dokümanda (docs/architecture/01_contracts.md) tartışılıyor;
-kesinleşmeden pydantic modeli yazılmayacak.
-"""
+"""contracts.model_bundle -- ModelBundle (fitted pipeline + metadata + best_iteration + provenance). Dondu."""

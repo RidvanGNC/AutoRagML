@@ -1,5 +1,1 @@
-"""contracts.validation
-
-Durum: taslak. Alanlar mimari dokümanda (docs/architecture/01_contracts.md) tartışılıyor;
-kesinleşmeden pydantic modeli yazılmayacak.
-"""
+"""contracts.validation -- ValidationReport (ADR 0010/6 + 0011). folds/leakage(3 kategori)/oof/nested. Dondu."""
