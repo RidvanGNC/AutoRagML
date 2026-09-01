@@ -9,6 +9,13 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 ## [Unreleased]
 
 ### Eklendi
+- **İlk implementasyon kodu**: `contracts/` pydantic v2 modelleri (enums, _base, RunConfig, Dataset, DataProfile/ColumnProfile/TimeSeriesProfile, TaskSpec, PlanContext, AdaptivePlan, Candidate, TuningResult, ValidationReport, ScoreBoard/SelectionResult, ModelBundle, RunManifest, EngineResult, RunResult).
+- `tests/contract/test_contracts_smoke.py` — 12 test (doğrulama, frozen, alias round-trip, kompozisyon).
+- `pydantic.mypy` plugin; `.venv` + `pip install -e .[dev]` çalışır.
+
+### Değişti
+- **`requires-python` `>=3.10` → `>=3.11`** (enum.StrEnum, tomllib). Ruff/mypy `py311`; CI matrisi 3.11/3.12/3.13.
+- Uzun stub docstring satırları reflow (E501).
 - ADR 0015: `RunManifest` (genişletildi: env/timeline/warnings/realized_seconds/K) + `EngineResult` + `RunResult` + `PlanContext`; uçtan uca orkestrasyon akışı.
 - Açık sorular kapandı: `PlanContext` (test/full erişim yok), `candidate_ops` → HPO arama uzayı (gruplu), recipe registry katmanlı (`dynamics/recipes/` + `recipe_paths` + entry-points).
 - Stub: `contracts/{run_manifest,engine_result,plan_context,run_result}.py`.

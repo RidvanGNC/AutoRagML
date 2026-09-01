@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "autoragml"
 description = "Modalite-agnostik, deterministik AutoML çekirdeği (v1: tablo + zaman serisi). RAG/agent katmanı v2."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"  # enum.StrEnum, tomllib, exception groups
 license = { text = "TBD" }  # proje lisansı kesinleşmedi — bkz. docs/architecture/decisions
 authors = [{ name = "AutoRagML" }]
 keywords = ["automl", "forecasting", "time-series", "tabular", "machine-learning"]
@@ -62,19 +62,25 @@ packages = ["src/autoragml"]
 
 [tool.ruff]
 line-length = 120
-target-version = "py310"
+target-version = "py311"
 src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 packages = ["autoragml"]
 strict = true
 namespace_packages = true
 explicit_package_bases = true
 mypy_path = "src"
+plugins = ["pydantic.mypy"]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
