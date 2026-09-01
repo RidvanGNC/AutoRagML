@@ -83,6 +83,30 @@ def run_one(ds: BenchmarkDataset, *, hpo: str, out_dir: Path) -> Outcome:
     return outcome
 
 
+def _prefetch(selected: list[BenchmarkDataset]) -> int:
+    """Verisetlerini indir/cache'le ve boyutlarını raporla (koşum yok)."""
+    from sklearn.datasets import get_data_home
+
+    print(f"sklearn veri cache: {get_data_home()}\n")
+    failed = 0
+    for ds in selected:
+        t0 = time.perf_counter()
+        try:
+            df, target = ds.loader()
+        except Exception as exc:  # noqa: BLE001
+            failed += 1
+            print(f"  {ds.name:22} HATA: {type(exc).__name__}: {exc}")
+            continue
+        mem_mb = df.memory_usage(deep=True).sum() / 1e6
+        n_missing = int(df.isna().sum().sum())
+        print(
+            f"  {ds.name:22} {df.shape[0]:>7} × {df.shape[1]:>2}  "
+            f"hedef={target:<12} ~{mem_mb:5.1f}MB  eksik={n_missing:<6} ({time.perf_counter() - t0:.1f}s)"
+        )
+    print(f"\n{len(selected) - failed}/{len(selected)} hazır.")
+    return 1 if failed else 0
+
+
 def _write_summary(outcomes: list[Outcome], run_dir: Path) -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "summary.json").write_text(
@@ -115,6 +139,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--only", action="append", help="Sadece bu dataset(ler)")
     parser.add_argument("--hpo", default="light", choices=["none", "light", "thorough"])
     parser.add_argument("--list", action="store_true", help="Kayıtlı setleri listele ve çık")
+    parser.add_argument(
+        "--download", action="store_true",
+        help="Sadece verisetlerini indir/cache'le (koşum yapma), boyutları raporla",
+    )
     args = parser.parse_args(argv)
 
     if args.list:
@@ -123,6 +151,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     selected = [BY_NAME[n] for n in args.only] if args.only else DATASETS
+
+    if args.download:
+        return _prefetch(selected)
     run_dir = _RUNS_DIR / datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     outcomes = [run_one(d, hpo=args.hpo, out_dir=run_dir / "outputs") for d in selected]
     _write_summary(outcomes, run_dir)
