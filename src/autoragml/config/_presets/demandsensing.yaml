@@ -1,0 +1,4 @@
+description: DemandSensing hattını yeniden üreten referans reçete (regresyon testi için).
+extends: timeseries_rolling
+project_name: demandsensing
+# NOT: per_group_champion yapısal seçimdir; dynamics/planner veriye bakıp karar verir (ADR 0010).

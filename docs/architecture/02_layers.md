@@ -5,11 +5,17 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
 
 ---
 
-## config/
-- **Girdi:** kullanıcı YAML/kwargs + preset adı + paket varsayılanı
-- **Çıktı:** `RunConfig`
-- Katmanlı merge: varsayılan ← preset ← kullanıcı dosyası ← runtime override
-- Zorunlu alan yok; boş config akıllı varsayılanla çalışır (analyzers doldurur)
+## config/  (ADR 0016 — KOD YAZILDI)
+- **Girdi:** `target` + preset adı + kullanıcı YAML + runtime override
+- **Çıktı:** `ConfigResolution` (`config: RunConfig`, `provenance: dict[path→layer]`, `layers[]`)
+- Katmanlı merge: `defaults ← preset (extends zinciri, her biri ayrı katman) ← file ← overrides`.
+  Derin merge; scalar/list/None değiştirir; bilinmeyen alan → `ConfigError`
+- `resolve_run_config()` — `merge.py` (provenance), `presets.py` (`extends` + döngü),
+  `loaders.py` (YAML)
+- Yerleşik presetler pakete gömülü: `config/_presets/*.yaml` (`list_presets()`)
+- `config/settings.py` — `Settings`: `.env` + ortam; `resolve_secret(name)→SecretStr`;
+  asla serialize edilmez. `RunConfig.*_env` adlarını çözer
+- `target` zorunlu; forecasting preset'i `time_col` ister (RunConfig validator)
 
 ## io/  (ADR 0009)
 - **Girdi:** DataFrame · `.csv` · `.parquet` · csv/parquet klasörü · (opsiyonel) DB (`[db]`)

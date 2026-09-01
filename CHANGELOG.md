@@ -9,6 +9,17 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 ## [Unreleased]
 
 ### Eklendi
+- ADR 0016: config çözümleme — katmanlı merge + alan-düzeyi provenance + preset `extends` + `Settings` (`.env`) + preset konumu (pakete gömülü).
+- **`config/` katmanı kodlandı**: `resolve_run_config()` → `ConfigResolution`; `merge.py` (deep-merge + provenance), `presets.py` (`extends` zinciri + döngü tespiti), `loaders.py`, `settings.py` (dotenv parser + `SecretStr` çözümü).
+- `contracts/config_resolution.py` — `ConfigResolution` (`config` + `provenance` + `layers`).
+- Yerleşik presetler `src/autoragml/config/_presets/`: `tabular_fast`, `timeseries_rolling`, `demandsensing` (RunConfig alan adlarıyla birebir). Wheel'e dahil (doğrulandı).
+- `tests/unit/config/` — 22 test (merge, preset extends, settings, uçtan uca çözümleme).
+- `exceptions.py`: `AutoRagMLError` / `ConfigError` / `PresetError`.
+
+### Değişti
+- Çekirdek bağımlılık: `pydantic-settings>=2.2`. Dev: `types-PyYAML`.
+- Repo-kök `configs/presets/` kaldırıldı (pakete taşındı); `configs/` = kullanıcı proje config'leri.
+- `02_layers.md` config bölümü koda göre güncel.
 - **İlk implementasyon kodu**: `contracts/` pydantic v2 modelleri (enums, _base, RunConfig, Dataset, DataProfile/ColumnProfile/TimeSeriesProfile, TaskSpec, PlanContext, AdaptivePlan, Candidate, TuningResult, ValidationReport, ScoreBoard/SelectionResult, ModelBundle, RunManifest, EngineResult, RunResult).
 - `tests/contract/test_contracts_smoke.py` — 12 test (doğrulama, frozen, alias round-trip, kompozisyon).
 - `pydantic.mypy` plugin; `.venv` + `pip install -e .[dev]` çalışır.

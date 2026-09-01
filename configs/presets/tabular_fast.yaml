@@ -1,7 +1,0 @@
-# Hızlı tablo taslağı — alanlar contracts kesinleşince doldurulacak.
-preset: tabular_fast
-task_hint: null            # analyzers çıkarır
-budget: { mode: time, value: 300, per_fold_seconds: 60 }
-split_policy: { kind: kfold, n_splits: 5, shuffle: true }
-primary_metric: null       # task'e göre varsayılan
-tracking: { backend: jsonl }

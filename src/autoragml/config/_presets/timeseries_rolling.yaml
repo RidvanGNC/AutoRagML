@@ -1,0 +1,22 @@
+description: Zaman serisi / rolling-origin (DemandSensing deseni). time_col zorunlu — override ile verin.
+task_hint: forecasting
+modality_hint: timeseries
+hpo_level: light
+split_policy:
+  kind: rolling_origin
+  horizon: 4
+  step: 4
+  n_folds: 4
+  min_train_periods: 52
+scenarios:
+  - scenario_1
+  - scenario_2
+primary_metric: smape
+metric_by_class:
+  smooth: wmape
+  intermittent: csl
+  erratic: rmse
+  lumpy: csl
+  insufficient: wmape
+guardrails:
+  enabled: true

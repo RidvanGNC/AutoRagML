@@ -15,6 +15,7 @@ from autoragml.contracts.adaptive_plan import (
     RegimeDef,
 )
 from autoragml.contracts.candidate import Candidate, SearchDim
+from autoragml.contracts.config_resolution import ConfigResolution
 from autoragml.contracts.data_profile import (
     ColumnProfile,
     ColumnStats,
@@ -74,6 +75,7 @@ __all__ = [
     "ColumnProfile",
     "ColumnStats",
     "ComparisonTests",
+    "ConfigResolution",
     "Contract",
     "DataProfile",
     "DataSnapshot",

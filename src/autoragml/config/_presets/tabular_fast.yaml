@@ -1,0 +1,10 @@
+description: Hızlı tablo — küçük/orta veride pratik varsayılanlar.
+modality_hint: tabular
+hpo_level: light
+split_policy:
+  kind: kfold
+  n_folds: 5
+budget:
+  max_trials_per_model: 15
+tracking:
+  backend: jsonl
