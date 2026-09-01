@@ -69,6 +69,7 @@ from autoragml.contracts.validation import (
     LeakageViolation,
     ValidationReport,
 )
+from autoragml.contracts.validation_config import ValidationConfig
 
 __all__ = [
     "AdaptivePlan",
@@ -124,6 +125,7 @@ __all__ = [
     "TrackingConfig",
     "Trial",
     "TuningResult",
+    "ValidationConfig",
     "ValidationReport",
     "enums",
 ]

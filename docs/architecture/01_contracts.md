@@ -43,6 +43,7 @@ Serialize edilebilir (pydantic v2). **Sır taşımaz** — yalnız `*_env` adlar
 | `engines` | obj \| None | `None` | aktif engine + override; `None` → analyzers seçer |
 | `analyzers` | `AnalyzerConfig` | varsayılan | ADR 0010 eşikleri: `thresholds` + `timeseries` + `profiling_sample_rows` |
 | `dynamics` | `DynamicsConfig` | varsayılan | ADR 0007/0015: `structure`, per-group eşikleri, transform seçenekleri, kodlama, `recipes[]`, `drop_leakage_suspects` |
+| `validation` | `ValidationConfig` | varsayılan | ADR 0010/6+0013: `min_rows_for_cv`, `default_kfold_splits`, `default_rolling_folds`, `holdout_fraction`, `early_stopping_fraction` |
 | `tracking.backend` | enum | `"jsonl"` | none \| jsonl \| mlflow |
 | `tracking.uri_env` | `str \| None` | `None` | mlflow için env-var **adı** |
 | `llm` | obj \| None | `None` | v2. `{provider, model, endpoint_env, api_key_env}` — sır yok |

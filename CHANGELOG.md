@@ -9,6 +9,13 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 ## [Unreleased]
 
 ### Eklendi
+- **`validators/` katmanı kodlandı** (ADR 0010/6 + 0011 + 0013): split sınırını yöneten tek yer.
+  - `splitters.py` — Holdout / KFold / StratifiedKFold / GroupKFold / **RollingOrigin** (genişleyen train, sabit horizon, zaman sızıntısı yok) / FixedWindow + `resolve_splitter` (`split_policy` kısmi override + görev tabanlı; küçük veri → holdout)
+  - `runner.py` — nested CV: `Tuner.tune` iç resample (`DefaultTuner` = plan varsayılanları, `nested=False`) → `FeaturePipeline.fit_transform(train)` + `apply(test)` → `TargetTransform` fit(train_y) → `build_estimator` + fold-içi iç-val early stopping (lightgbm/sklearn-HGB) → `compute_metrics`. OOF metrik + fold'lar arası SE. `run_validation_suite` (aynı split, çöken aday atlanır)
+  - `leakage_checks.py` — overlap (satır/zaman/grup) + preprocessing (provenance) → `LeakageReport`
+- **`scoring/metrics/` kodlandı** — sMAPE/MAPE/WMAPE/RMSE/MAE/bias/CSL + accuracy/f1_macro/balanced_accuracy; `compute_metrics(y, ŷ, task)`, `default_primary_metric`, `lower_is_better`.
+- `RunConfig.validation` (`ValidationConfig`).
+- `tests/unit/validators/` — 19 test (rolling-origin zaman sızıntısı, resolve, leakage, nested tuner, suite skip).
 - **`models/` + registry kodlandı** (ADR 0012): `resolve_candidates(config, task) -> [Candidate]`.
   - `models/catalog/*.yaml` pakete gömülü (tabular/baselines/timeseries); wheel'e dahil
   - `registry.py` — YAML deep-merge + `requires` (`find_spec`) + `class_path` importable kontrolü → eksikse atla + tek WARNING; `enabled:false`; modalite + task filtresi; entry-points `autoragml.models` ikincil

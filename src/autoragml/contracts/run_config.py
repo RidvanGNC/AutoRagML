@@ -21,6 +21,7 @@ from autoragml.contracts.enums import (
     Task,
     TrackingBackend,
 )
+from autoragml.contracts.validation_config import ValidationConfig
 
 
 class BudgetConfig(Contract):
@@ -112,6 +113,7 @@ class RunConfig(Contract):
     io: IOConfig = Field(default_factory=IOConfig)
     analyzers: AnalyzerConfig = Field(default_factory=AnalyzerConfig)
     dynamics: DynamicsConfig = Field(default_factory=DynamicsConfig)
+    validation: ValidationConfig = Field(default_factory=ValidationConfig)
     tracking: TrackingConfig = Field(default_factory=TrackingConfig)
     llm: LLMConfig | None = None
     guardrails: GuardrailConfig = Field(default_factory=GuardrailConfig)

@@ -97,17 +97,20 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
 - **Yalnız iç resample'da çalışır** (dış test'e dokunmaz — ADR 0010/6)
 - Per-candidate timeout enforce (ADR 0014/6)
 
-## validators/  (ADR 0010/6 + 0011 — split sınırını yöneten TEK yer)
-- **Girdi:** `Candidate` + `Dataset` + `AdaptivePlan` + split policy
-- **Çıktı:** `ValidationReport`
-- Split: holdout, kfold, stratified, group, TimeSeriesSplit, RollingOrigin, FixedWindow
-- **Nested CV**: HPO + `candidate_ops` seçimi + (opsiyonel) feature selection **iç
-  resample**'da; dış fold yalnız skorlar (multi-test leakage yok)
-- Feature selection etkinse → iç-fold **konsensüs** (cnCV)
-- Dış fold döngüsü: `FittedTransform.fit(train)` → model fit (early stop) →
-  `apply(test)` → predict → metrik. Regime/dynamics fit de fold içinde.
-- `leakage_checks` 3 kategori: `overlap` (satır/zaman örtüşmesi) · `preprocessing`
-  (split öncesi fit) · `multi_test` (dış test'te seçim) → **BLOCK**
+## validators/  (ADR 0010/6 + 0011 — split sınırını yöneten TEK yer, KOD YAZILDI)
+- **Girdi:** `Candidate` + frame + `AdaptivePlan` + `DataProfile` + `TaskSpec` + `RunConfig`
+- **Çıktı:** `run_validation(...) -> ValidationReport` · `run_validation_suite(...)` (aynı split)
+- `splitters.py` — Holdout / KFold / StratifiedKFold / GroupKFold / RollingOrigin /
+  FixedWindow + `resolve_splitter` (`split_policy` kısmi override + görev tabanlı;
+  küçük veri → holdout). Frame pozisyonel indeksli.
+- `runner.py` — dış fold döngüsü: `Tuner.tune` (iç resample; `DefaultTuner` = plan
+  varsayılanları, `nested=False`) → `FeaturePipeline.fit_transform(train)` +
+  `apply(test)` → `TargetTransform` fit(train_y) → `build_estimator` + fold-içi iç-val
+  early stopping (lightgbm/sklearn-HGB) → predict → `scoring.metrics.compute_metrics`.
+  OOF metrik + fold'lar arası SE.
+- `leakage_checks.py` — `overlap` (satır/zaman/grup) · `preprocessing` (provenance != train)
+  → `LeakageReport`. `multi_test` runner tarafından garanti (tuner test'i görmez).
+- `RunConfig.validation` (`ValidationConfig`).
 
 ## scoring/  (ADR 0014 — dürüst seçim)
 - **Girdi:** `[ValidationReport]` (OOF) + `RunConfig` + (opsiyonel) demand-class
