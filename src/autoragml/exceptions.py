@@ -13,3 +13,7 @@ class ConfigError(AutoRagMLError):
 
 class PresetError(ConfigError):
     """Preset bulunamadı, bozuk, veya `extends` döngüsü (ADR 0016)."""
+
+
+class DataLoadError(AutoRagMLError):
+    """Veri yükleme / şema / fingerprint hatası (ADR 0009)."""

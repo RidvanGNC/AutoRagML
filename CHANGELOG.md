@@ -9,6 +9,19 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 ## [Unreleased]
 
 ### Eklendi
+- **`io/` katmanı kodlandı** (ADR 0009): `load_dataset(src, config) -> Dataset`.
+  - `sources.py` — DataFrame/csv/tsv/parquet/dizin/`DbSource` çözümleme + boyut yoklama
+  - `fingerprint.py` — **strict** sıra-bağımsız çoklu-küme hash (sum+xor+count over `hash_pandas_object`, sort'suz, streaming) + **fast** structural
+  - `layout.py` — wide tespiti + `melt` (eager) + long/single_series/n-a; lazy+wide → hata
+  - `lazyframe.py` — `LazyFrame` (chunk akışı); `db.py` — SQLAlchemy adaptörü (lazy import)
+  - otomatik eager/lazy (`io.eager_max_bytes`, varsayılan 1 GiB)
+- `logging.py` — kütüphane logger yardımcısı (kök logger'ı yapılandırmaz).
+- `tests/unit/io/` — 25 test (fingerprint sıra-bağımsızlığı/hassasiyeti, layout, eager==lazy fingerprint, DB/sqlite, boş/uzantı hataları).
+
+### Değişti
+- **`requires-python` `>=3.11` → `>=3.12`** (modern tip stub'ları — numpy 2.5 PEP 695). Ruff/mypy `py312`; CI 3.12/3.13.
+- `Dataset.schema` → **`Dataset.dtypes`** (pydantic `schema()` çakışması; alias yerine temiz ad).
+- Dev dep: `pandas-stubs`, `sqlalchemy`. Yeni extra: `db`. mypy override: `pyarrow.*`.
 - ADR 0016: config çözümleme — katmanlı merge + alan-düzeyi provenance + preset `extends` + `Settings` (`.env`) + preset konumu (pakete gömülü).
 - **`config/` katmanı kodlandı**: `resolve_run_config()` → `ConfigResolution`; `merge.py` (deep-merge + provenance), `presets.py` (`extends` zinciri + döngü tespiti), `loaders.py`, `settings.py` (dotenv parser + `SecretStr` çözümü).
 - `contracts/config_resolution.py` — `ConfigResolution` (`config` + `provenance` + `layers`).

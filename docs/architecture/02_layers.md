@@ -17,17 +17,17 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
   asla serialize edilmez. `RunConfig.*_env` adlarını çözer
 - `target` zorunlu; forecasting preset'i `time_col` ister (RunConfig validator)
 
-## io/  (ADR 0009)
-- **Girdi:** DataFrame · `.csv` · `.parquet` · csv/parquet klasörü · (opsiyonel) DB (`[db]`)
-- **Çıktı:** `Dataset`
-- Sorumluluklar:
-  - kaynak boyut yoklaması → eager/lazy karar (`RunConfig.io.eager_max_bytes`)
-  - şema çıkarımı; `n_rows` **tam sayım**
-  - wide → long `melt` (tespit + log; `layout` işaretle)
-  - **strict fingerprint**: kanonik form üzerinden tek streaming geçişte SHA256
-  - DB adaptörü opsiyonel (SQLAlchemy)
-- v1: yalnız `modparts.tabular`. `relations` alanı `None` (rezerve).
-- Bulut: `fsspec` opsiyonel.
+## io/  (ADR 0009 — KOD YAZILDI)
+- **Girdi:** DataFrame · `.csv`/`.tsv` · `.parquet` · csv/parquet klasörü · `DbSource` (`[db]`)
+- **Çıktı:** `Dataset` — `load_dataset(src, config)`
+- `sources.py` kaynak çözümleme + boyut yoklama → `__init__.py` eager/lazy karar
+  (`config.io.eager_max_bytes`, varsayılan 1 GiB)
+- `fingerprint.py` — **strict** (sıra-bağımsız çoklu-küme hash: `sum` mod 2^64 + `xor` +
+  `count` over `hash_pandas_object`; sort gerektirmez → streaming) + **fast** (structural)
+- `layout.py` — wide tespiti + `melt` (eager; lazy+wide → hata) + `long/single_series/n-a`
+- `lazyframe.py` — `LazyFrame` (chunk akışı, `iter_chunks`, `to_pandas`)
+- `db.py` — `DbSource` + `read_sql` (sqlalchemy lazy import)
+- v1: `modparts={"tabular": ...}`, `relations=None`
 
 ## analyzers/  (deterministik "perception" — ADR 0010)
 - **Girdi:** `Dataset` + `RunConfig`

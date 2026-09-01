@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "autoragml"
 description = "Modalite-agnostik, deterministik AutoML çekirdeği (v1: tablo + zaman serisi). RAG/agent katmanı v2."
 readme = "README.md"
-requires-python = ">=3.11"  # enum.StrEnum, tomllib, exception groups
+requires-python = ">=3.12"  # PEP 695, enum.StrEnum, modern stubs
 license = { text = "TBD" }  # proje lisansı kesinleşmedi — bkz. docs/architecture/decisions
 authors = [{ name = "AutoRagML" }]
 keywords = ["automl", "forecasting", "time-series", "tabular", "machine-learning"]
@@ -26,6 +26,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+db         = ["sqlalchemy>=2.0"]
 xgboost    = ["xgboost>=2.0"]
 catboost   = ["catboost>=1.2"]
 timeseries = ["statsforecast>=1.7"]           # v1: AutoARIMA/AutoETS/MSTL/Theta
@@ -51,6 +52,8 @@ dev = [
     "mypy>=1.11",
     "hatch>=1.12",
     "types-PyYAML>=6.0",
+    "pandas-stubs>=2.2",
+    "sqlalchemy>=2.0",
 ]
 
 [project.scripts]
@@ -64,20 +67,24 @@ packages = ["src/autoragml"]
 
 [tool.ruff]
 line-length = 120
-target-version = "py311"
+target-version = "py312"
 src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 packages = ["autoragml"]
 strict = true
 namespace_packages = true
 explicit_package_bases = true
 mypy_path = "src"
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["pyarrow.*"]
+ignore_missing_imports = true
 
 [tool.pydantic-mypy]
 init_forbid_extra = true

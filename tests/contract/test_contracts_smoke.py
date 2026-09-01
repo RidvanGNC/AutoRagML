@@ -77,18 +77,18 @@ def test_taskspec_forecasting_needs_timeseries_modality() -> None:
     assert ok.horizon == 4
 
 
-def test_dataset_schema_alias_roundtrip() -> None:
+def test_dataset_roundtrip() -> None:
     ds = c.Dataset(
         source=c.DataSource(kind=c.enums.SourceKind.CSV, ref="a.csv"),
-        schema={"y": "float64", "ds": "datetime64[ns]"},
+        dtypes={"y": "float64", "ds": "datetime64[ns]"},
         shape=c.DatasetShape(n_rows=10, n_cols=2),
         materialization=c.enums.Materialization.EAGER,
         fingerprint="deadbeef",
-        fingerprint_spec="sha256(sorted-schema||hash_pandas_object)",
+        fingerprint_spec="strict/multiset-v1",
     )
-    dumped = ds.model_dump(by_alias=True)
-    assert "schema" in dumped
-    assert c.Dataset.model_validate(dumped).schema_ == ds.schema_
+    dumped = ds.model_dump()
+    assert c.Dataset.model_validate(dumped).dtypes == ds.dtypes
+    assert c.Dataset.model_validate(dumped).relations is None
 
 
 def test_scoreboard_composition() -> None:

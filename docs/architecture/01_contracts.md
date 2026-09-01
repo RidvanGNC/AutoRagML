@@ -53,7 +53,7 @@ Serialize edilebilir (pydantic v2). **Sır taşımaz** — yalnız `*_env` adlar
 | Alan | Tip | Not |
 |---|---|---|
 | `source` | obj | `{kind: dataframe\|csv\|parquet\|csv_dir\|parquet_dir\|db, ref}` |
-| `schema` | `dict[str, dtype]` | kolon → dtype |
+| `dtypes` | `dict[str, str]` | kolon → ham dtype string (`schema` yerine — pydantic çakışması) |
 | `shape` | `(n_rows, n_cols)` | `n_rows` **her zaman tam sayım** (lazy'de bile — tahmin yok) |
 | `materialization` | `"eager" \| "lazy"` | otomatik: boyut `RunConfig.io.eager_max_bytes` eşiği |
 | `handle` | ref | eager: DataFrame · lazy: pyarrow dataset / chunk iterator |

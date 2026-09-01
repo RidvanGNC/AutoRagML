@@ -34,7 +34,7 @@ class Dataset(Contract):
     """Yüklenmiş veri kümesi + kimlik damgası."""
 
     source: DataSource
-    schema_: dict[str, str] = Field(alias="schema")  # kolon -> dtype str
+    dtypes: dict[str, str]  # kolon -> ham dtype string
     shape: DatasetShape
     materialization: Materialization
     layout: Layout = Layout.NA
