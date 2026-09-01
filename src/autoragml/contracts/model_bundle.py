@@ -28,6 +28,7 @@ class BundleMetadata(Contract):
     config_snapshot_ref: str | None = None
     adaptive_plan_summary: dict[str, Any] = Field(default_factory=dict)
     params: dict[str, Any] = Field(default_factory=dict)
+    postprocess_summary: dict[str, Any] = Field(default_factory=dict)  # uygulanan düzeltme adımları (ADR 0017)
 
 
 class ModelBundle(Contract):

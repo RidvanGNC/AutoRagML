@@ -146,10 +146,20 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
 - `runners/InProcessRunner` — engine'i sarar; çökme → `EngineResult(status=FAILED)`
 - **v1 sınırı:** `per_group_champion` planlanır ama pooled ile ilerlenir (per-group refit v1.1)
 
-## postprocessors/
-- **Girdi:** ham tahmin + `AdaptivePlan` + business kuralları
-- **Çıktı:** düzeltilmiş tahmin; `ModelBundle`'a gömülür
-- clip, round (eşikli), quantile calibrate, conformal interval, business-rule hook
+## postprocessors/  (ADR 0017 — KOD YAZILDI)
+- **Girdi:** `PostprocessConfig` + `DataProfile` + `TaskSpec` + `champ_report.oof`
+- **Çıktı:** `build_postprocessor(...) -> Postprocessor` → `.fit(y_true?, y_pred?) -> FittedPostprocessor`
+  (`ModelBundle.pipeline`'a gömülür; `predict()` target-inverse'ten sonra çağırır)
+- Sıra: **`calibrate → clip → round → business_rule`** (`_POST_ORDER`)
+- `calibrate` (OOF): `additive_bias` (`y − mean(resid)`) · `multiplicative` (`y · clamp(Σtrue/Σpred)`);
+  OOF yoksa atlanır (WARNING). `linear`/isotonic → v1.1
+- `clip`: `auto_nonneg` (varsayılan; `profile.target.min ≥ 0` + regresyon → `lower=0`) ·
+  opsiyonel `auto_upper` (`pXX·mult`) · açık `lower`/`upper` kazanır
+- `round`: `off`/`nearest`/`threshold` (DemandSensing eşikli)/`ceil`/`floor`
+- **Leakage-safe (ADR 0011):** fit yalnız `refit_champion` içinde, OOF üzerinden
+- **v1 sınırı:** `conformal.enabled` + `apply_in_validation` → `ValueError` (v1.1); `business_rule`
+  hook `interfaces` enjekte eder (RunConfig'e girmez)
+- `BundleMetadata.postprocess_summary` — uygulanan adımların serialize kaydı
 
 ## persistence/
 - **Girdi:** champion pipeline + tüm contract nesneleri

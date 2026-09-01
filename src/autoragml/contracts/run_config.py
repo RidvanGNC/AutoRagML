@@ -22,6 +22,7 @@ from autoragml.contracts.enums import (
     Task,
     TrackingBackend,
 )
+from autoragml.contracts.postprocess_config import PostprocessConfig
 from autoragml.contracts.promotion_config import PromotionConfig
 from autoragml.contracts.validation_config import ValidationConfig
 
@@ -122,6 +123,7 @@ class RunConfig(Contract):
     llm: LLMConfig | None = None
     guardrails: GuardrailConfig = Field(default_factory=GuardrailConfig)
     promotion: PromotionConfig = Field(default_factory=PromotionConfig)
+    postprocess: PostprocessConfig = Field(default_factory=PostprocessConfig)
 
     # --- modelleme ---
     scenarios: list[str] = Field(default_factory=lambda: ["scenario_1"])

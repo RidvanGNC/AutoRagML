@@ -13,6 +13,7 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 
+from autoragml.postprocessors import FittedPostprocessor
 from autoragml.preprocessors.target import FittedTargetTransform
 from autoragml.transform import FittedTransform
 
@@ -20,12 +21,13 @@ _Arr = npt.NDArray[np.float64]
 
 
 class FittedModelPipeline:
-    """Fitted feature pipeline + estimator + hedef dönüşümü — tek `predict`."""
+    """Fitted feature pipeline + estimator + hedef dönüşümü + postprocess — tek `predict`."""
 
     __slots__ = (
         "_estimator",
         "_feature_cols",
         "_feature_pipeline",
+        "_postprocessor",
         "_pre_transform",
         "_reserved",
         "_target_transform",
@@ -40,6 +42,7 @@ class FittedModelPipeline:
         feature_cols: list[str],
         reserved: set[str],
         pre_transform: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
+        postprocessor: FittedPostprocessor | None = None,
     ) -> None:
         self._feature_pipeline = feature_pipeline
         self._estimator = estimator
@@ -47,6 +50,7 @@ class FittedModelPipeline:
         self._feature_cols = feature_cols
         self._reserved = reserved
         self._pre_transform = pre_transform
+        self._postprocessor = postprocessor
 
     def predict(self, frame: pd.DataFrame) -> _Arr:
         """Ham feature frame'inden nokta tahmini.
@@ -61,7 +65,10 @@ class FittedModelPipeline:
         x = x.reindex(columns=self._feature_cols, fill_value=0.0)
         x = x.apply(pd.to_numeric, errors="coerce").fillna(0.0)
         raw = np.asarray(self._estimator.predict(x), dtype=np.float64)
-        return self._target_transform.inverse(raw)
+        out = self._target_transform.inverse(raw)
+        if self._postprocessor is not None:
+            out = self._postprocessor.apply(out)
+        return out
 
     @property
     def feature_cols(self) -> list[str]:

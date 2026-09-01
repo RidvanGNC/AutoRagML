@@ -25,6 +25,7 @@ from autoragml.contracts.validation import ValidationReport
 from autoragml.engines.model_pipeline import FittedModelPipeline
 from autoragml.exceptions import EngineError
 from autoragml.models import build_estimator
+from autoragml.postprocessors import build_postprocessor
 from autoragml.preprocessors import FeaturePipeline, TargetTransform
 from autoragml.validators import DefaultTuner, Tuner
 from autoragml.validators.frame_ops import (
@@ -102,6 +103,18 @@ def refit_champion(
     else:
         best_iter = fit_estimator(estimator, candidate, x, tt.forward(y), config, task)
 
+    postproc = build_postprocessor(config.postprocess, profile, task)
+    fitted_post = None
+    postprocess_summary: dict[str, object] = {}
+    if postproc.is_active:
+        oof = getattr(champ_report, "oof", None)
+        yt = getattr(oof, "y_true", None)
+        yp = getattr(oof, "y_pred", None)
+        candidate_post = postproc.fit(yt, yp)
+        if not candidate_post.is_noop:
+            fitted_post = candidate_post
+            postprocess_summary = candidate_post.summary
+
     model_pipeline = FittedModelPipeline(
         feature_pipeline=fitted_pipe,
         estimator=estimator,
@@ -109,6 +122,7 @@ def refit_champion(
         feature_cols=list(x.columns),
         reserved=reserved,
         pre_transform=pre_transform,
+        postprocessor=fitted_post,
     )
 
     champ_row = next((r for r in selection.scoreboard.rows if r.model_key == key), None)
@@ -125,6 +139,7 @@ def refit_champion(
             "candidate_choices": outcome.candidate_choices,
         },
         params=params,
+        postprocess_summary=postprocess_summary,
     )
     return ModelBundle(
         metadata=metadata,

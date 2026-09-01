@@ -43,6 +43,7 @@ Serialize edilebilir (pydantic v2). **Sır taşımaz** — yalnız `*_env` adlar
 | `hpo_backend` | `HpoBackend` | `"random_search"` | `optuna` opsiyonel (`[hpo]`) |
 | `guardrails` | `GuardrailConfig` | `{enabled: true, prediction_scale_multiplier_max: 100}` | metrik tavanları + prediction eşikleri + `model_scenario_blocklist` (ADR 0014) |
 | `promotion` | `PromotionConfig` | `{smape_max: 35, min_folds: 2, require_leakage_pass: true}` | mutlak eşik kapısı (ADR 0014) — bilgilendirir, engellemez |
+| `postprocess` | `PostprocessConfig` | `{enabled: true, clip.auto_nonneg: true, round.mode: off, calibrate.method: off}` | tahmin düzeltme zinciri (ADR 0017); varsayılan ≈ no-op; `calibrate→clip→round→business_rule` |
 | `engines` | obj \| None | `None` | aktif engine + override; `None` → analyzers seçer |
 | `analyzers` | `AnalyzerConfig` | varsayılan | ADR 0010 eşikleri: `thresholds` + `timeseries` + `profiling_sample_rows` |
 | `dynamics` | `DynamicsConfig` | varsayılan | ADR 0007/0015: `structure`, per-group eşikleri, transform seçenekleri, kodlama, `recipes[]`, `drop_leakage_suspects` |
@@ -176,7 +177,7 @@ Deklaratif, serialize edilebilir. Kod taşımaz; **referans** taşır.
 ### ModelBundle  (`persistence/` üretir)
 - `pipeline` (fitted: `FittedTransform`'lar + estimator + postprocessors) — tüm train'de refit
 - `metadata`: feature list + hash, `task_spec`, `adaptive_plan` özeti, config snapshot,
-  `best_iteration` (ES modelleri için sabit), `provenance_fitted_on`
+  `best_iteration` (ES modelleri için sabit), `provenance_fitted_on`, `postprocess_summary` (ADR 0017)
 - `champion_info`, `metrics` (OOF + final holdout — bir kez)
 
 ### RunManifest  (`persistence/` üretir — ADR 0015)

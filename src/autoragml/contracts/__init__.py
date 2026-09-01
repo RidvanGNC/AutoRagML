@@ -37,6 +37,13 @@ from autoragml.contracts.dynamics_config import DynamicsConfig
 from autoragml.contracts.engine_result import EngineResult
 from autoragml.contracts.model_bundle import BundleMetadata, ModelBundle
 from autoragml.contracts.plan_context import PlanContext
+from autoragml.contracts.postprocess_config import (
+    CalibrateConfig,
+    ClipConfig,
+    ConformalConfig,
+    PostprocessConfig,
+    RoundConfig,
+)
 from autoragml.contracts.promotion_config import PromotionConfig
 from autoragml.contracts.run_config import (
     BudgetConfig,
@@ -77,14 +84,17 @@ __all__ = [
     "AnalyzerConfig",
     "BudgetConfig",
     "BundleMetadata",
+    "CalibrateConfig",
     "Candidate",
     "CandidateOpGroup",
     "ChampionInfo",
+    "ClipConfig",
     "ColumnOp",
     "ColumnProfile",
     "ColumnStats",
     "ComparisonTests",
     "ConfigResolution",
+    "ConformalConfig",
     "Contract",
     "DataProfile",
     "DataSnapshot",
@@ -104,10 +114,12 @@ __all__ = [
     "LeakageViolation",
     "ModelBundle",
     "PlanContext",
+    "PostprocessConfig",
     "PromotionConfig",
     "PromotionResult",
     "QualityFlag",
     "RegimeDef",
+    "RoundConfig",
     "RunConfig",
     "RunManifest",
     "RunResult",

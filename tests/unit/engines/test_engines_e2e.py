@@ -92,6 +92,16 @@ def test_timeseries_engine_end_to_end_with_reduction() -> None:
     assert not np.isnan(pred).any()
 
 
+def test_postprocess_embedded_in_champion_bundle() -> None:
+    ds, cfg, profile, task = _prep(
+        _tabular_df(), postprocess={"clip": {"lower": 5.0, "auto_nonneg": False}}
+    )
+    result = InProcessRunner().run(TabularCoreEngine(), ds, cfg, profile, task)
+    assert result.champion.metadata.postprocess_summary["clip"]["lower"] == 5.0
+    pred = result.champion.pipeline.predict(_tabular_df(50))
+    assert (pred >= 5.0).all()
+
+
 def test_runner_wraps_engine_failure() -> None:
     ds, cfg, profile, task = _prep(_tabular_df(50))
 

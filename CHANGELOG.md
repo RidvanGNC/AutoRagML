@@ -18,6 +18,18 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 - `test_timeseries_and_leakage.py`: `DatetimeIndex + pd.Timedelta` aritmetiği ayrı `date_range` ile değiştirildi (NumPy 2.5 "generic timedelta unit" DeprecationWarning).
 
 ### Eklendi
+- **`postprocessors/` katmanı kodlandı** (ADR 0017): `build_postprocessor(cfg, profile, task) -> Postprocessor`
+  → `.fit(y_true?, y_pred?) -> FittedPostprocessor` (`ModelBundle.pipeline`'a gömülür).
+  - Sıra: `calibrate → clip → round → business_rule` (`_POST_ORDER`)
+  - `calibrate` (yalnız `champ_report.oof`): `additive_bias` · `multiplicative` (clamp'li); OOF yoksa atlanır. `linear`/isotonic → v1.1
+  - `clip`: `auto_nonneg` (hedef min ≥ 0 + regresyon → `lower=0`) · opsiyonel `auto_upper` (`pXX·mult`) · açık sınır kazanır
+  - `round`: `off`/`nearest`/`threshold` (DemandSensing eşikli)/`ceil`/`floor`
+  - **leakage-safe** (ADR 0011): fit yalnız `refit_champion` içinde, OOF üzerinden
+  - `FittedModelPipeline` `postprocessor` slotu alır; `predict()` target-inverse sonrası uygular (None ise atlar)
+- Sözleşme: `RunConfig.postprocess` (`PostprocessConfig` + `ClipConfig`/`RoundConfig`/`CalibrateConfig`/`ConformalConfig`);
+  `BundleMetadata.postprocess_summary`.
+- `tests/unit/postprocessors/` — 18 test (auto_nonneg, clip/round/calibrate, sıra, v1 guard'lar, business_rule immutability, engine e2e gömme).
+- **v1 sınırı:** `conformal.enabled` + `apply_in_validation` → `ValueError` (v1.1: split-conformal + `predict_interval`).
 - **`engines/` katmanı kodlandı** (ADR 0015): `select_engine(task, config)` + `InProcessRunner`.
   - `core.run_core_pipeline` — ortak akış: `build_plan` → `resolve_candidates` → `run_validation_suite(tuner=resolve_tuner)` → `score_reports` → `refit_champion` (tüm train; ES modelde n_estimators = validation best_iteration medyanı) → `ModelBundle`
   - `TabularCoreEngine` / `TimeSeriesCoreEngine`
