@@ -34,7 +34,15 @@ def _tabular_df(n: int = 300) -> pd.DataFrame:
     rng = np.random.default_rng(0)
     x = rng.normal(size=(n, 3))
     y = x @ np.array([1.5, -2.0, 0.5]) + rng.normal(0, 0.3, n)
-    return pd.DataFrame({"y": y, **{f"f{i}": x[:, i] for i in range(3)}})
+    return pd.DataFrame(
+        {
+            "y": y,
+            **{f"f{i}": x[:, i] for i in range(3)},
+            "const": 1.0,  # near-constant → drop (yerel closure pickle testi)
+            "ts": pd.date_range("2024-01-01", periods=n, freq="D"),  # datetime → date_expand
+            "cat": rng.choice([f"g{i}" for i in range(40)], n),  # yüksek kardinalite → hashing
+        }
+    )
 
 
 class _Run(NamedTuple):

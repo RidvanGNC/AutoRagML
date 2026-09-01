@@ -21,6 +21,11 @@ htmlcov/
 !/outputs/.gitkeep
 !/outputs/README.md
 
+# Benchmark koşum çıktıları (indirilen veri ~/scikit_learn_data'da, repo dışı)
+/scripts/benchmarks/_runs/
+/scripts/benchmarks/*.log
+scratch_bench/
+
 # IDE / OS
 .idea/
 .vscode/

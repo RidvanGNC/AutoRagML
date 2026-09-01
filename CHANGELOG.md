@@ -25,9 +25,17 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 - Sözleşme: `EnsembleSpec`, `RunConfig.ensemble` (`EnsembleConfig`), `BundleMetadata.ensemble`,
   `Candidate.ensemble_members`/`scale`. `EngineStatus`: ensemble/reduction mesajları artık PARTIAL yapmıyor
   (yalnız gerçek sorunlar).
-- `tests/unit/ensembling/` (9) + `tests/unit/engines/test_ensemble_integration.py` (3) — 246 test toplam.
+- `tests/unit/ensembling/` (9) + `tests/unit/engines/test_ensemble_integration.py` (3) + `test_stateless_pickle.py` (6) — 251 test toplam.
+- **`scripts/benchmarks/`** — gerçek verisetlerinde uçtan uca koşum + harici test setinde naive baseline
+  karşılaştırması (`python -m scripts.benchmarks.run`). 1. dalga: 6 OpenML/sklearn tablo verisi
+  (regresyon/ikili/çok-sınıf). Sonuç: **6/6 SUCCESS** (naive'i +59…+755% geçti, OOF↔holdout tutarlı);
+  covtype `ColumnDropper` pickle bug'ını ortaya çıkardı (yukarıda düzeltildi). Detay: `scripts/benchmarks/RESULTS.md`.
 
 ### Düzeltildi
+- **`preprocessors/stateless`: fitted op'lar joblib/pickle ile serialize edilemiyordu** — `ColumnDropper.fit`
+  (ve date_expand/log1p/hashing) **yerel closure** (`_fn`) döndürüyordu → `save_bundle` kolon-düşüren
+  pipeline'larda `PicklingError` (benchmark covtype ortaya çıkardı). Tüm op'lar modül-düzeyi `__slots__`
+  callable sınıflarına çevrildi.
 - **CI macOS:** `brew install libomp` adımı eklendi — LightGBM'in OpenMP runtime'ı olmadan
   import edilemiyordu → registry `lightgbm`'i düşürüyor → 7 test (`test_tuners`, `test_estimator`,
   `test_registry`, `test_runner`) macos-latest'te patlıyordu.
