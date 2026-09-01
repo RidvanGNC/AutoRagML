@@ -59,12 +59,18 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
 - `synthesis.py` — v2 (LLM recipe üretimi); v1'de boş.
 - `RunConfig.dynamics` (`DynamicsConfig`).
 
-## preprocessors/  (ADR 0011 — leakage-safe by construction)
+## preprocessors/  (ADR 0011 — leakage-safe by construction, KOD YAZILDI)
 - **Girdi:** `AdaptivePlan` (`committed_ops` + seçilmiş `candidate_ops`) + train fold
-- **Çıktı:** `FittedTransform` (immutable)
-- Üç ilkel ayrı: stateless `transform` / `fit(train_frame)` / `apply(X)`
-- `fit`'i **yalnız `validators`** çağırır; split sınırını görmez
-- `provenance_fitted_on` kaydı; `serialize()` → `ModelBundle`
+- **Çıktı:** `FittedFeaturePipeline` (immutable, yalnız `apply`)
+- `FeaturePipeline.from_plan(plan, candidate_choices)` → sıralı transform zinciri
+  (drop → recipe → date_expand → impute → encode → numeric candidate)
+- `catalog.py` — op → sklearn transformer sarımı (`base.SklearnColumnTransform`):
+  impute · onehot/ordinal/**target_encode**(iç cross-fitting)/hashing · scale ·
+  yeo_johnson · quantile · `stateless.py` (drop/date_expand/log1p/hashing)
+- `target.py` — `TargetTransform` (`y` forward/inverse; engine estimator etrafında)
+- `fit`/`fit_transform` **yalnız `validators`** çağırır (fold içinde). `fit_transform ≠
+  fit + apply` — target_encode train'e cross-fit, test'e full-train
+- `autoragml/transform.py`: `Transform.fit_transform` protokole eklendi + `BaseTransform`
 
 ## models/ + registry  (ADR 0012 — YAML katalog)
 - **Girdi:** `TaskSpec` + `AdaptivePlan` + `RunConfig` + `configs/model_catalog/*.yaml`

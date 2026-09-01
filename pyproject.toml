@@ -83,7 +83,7 @@ mypy_path = "src"
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["pyarrow.*"]
+module = ["pyarrow.*", "sklearn.*"]
 ignore_missing_imports = true
 
 [tool.pydantic-mypy]

@@ -3,12 +3,17 @@
 `Transform` (fit edilmemiş) → `FittedTransform` (immutable). `preprocessors` katalog
 transformları ve `dynamics/recipes` custom transformlar bu protokole uyar.
 
-`fit`'i **yalnız `validators`** çağırır (fold içinde, `PlanContext.provenance == "train"`).
-Kullanıcı/recipe kodu split sınırını görmez.
+`fit`/`fit_transform`'u **yalnız `validators`** çağırır (fold içinde,
+`PlanContext.provenance == "train"`). Kullanıcı/recipe kodu split sınırını görmez.
+
+`fit_transform` ayrı bir metottur çünkü bazı dönüşümler (ör. target encoding) train
+çıktısını **cross-fitting** ile üretir ama test'e full-train kodlaması uygular
+(`fit().apply() != fit_transform()`, sklearn deseni).
 """
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import Protocol, runtime_checkable
 
@@ -42,6 +47,28 @@ class Transform(Protocol):
     def fit(self, frame: pd.DataFrame, ctx: PlanContext) -> FittedTransform:
         """Yalnız train frame'inden öğren; immutable `FittedTransform` döndür."""
         ...
+
+    def fit_transform(
+        self, frame: pd.DataFrame, ctx: PlanContext
+    ) -> tuple[FittedTransform, pd.DataFrame]:
+        """Fit + train çıktısını üret (cross-fitting olabilir)."""
+        ...
+
+
+class BaseTransform(ABC):
+    """Transform protokolü için taban — `fit_transform` varsayılanı fit + apply."""
+
+    name: str = "transform"
+
+    @abstractmethod
+    def fit(self, frame: pd.DataFrame, ctx: PlanContext) -> FittedTransform:
+        """Alt sınıf uygular."""
+
+    def fit_transform(
+        self, frame: pd.DataFrame, ctx: PlanContext
+    ) -> tuple[FittedTransform, pd.DataFrame]:
+        fitted = self.fit(frame, ctx)
+        return fitted, fitted.apply(frame)
 
 
 class StatelessFitted:

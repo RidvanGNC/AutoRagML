@@ -49,6 +49,15 @@ def analyze(dataset: Dataset, config: RunConfig) -> tuple[DataProfile, TaskSpec]
     modality, mod_warn = detect_modality(frame, config, layout=dataset.layout)
     warnings.extend(mod_warn)
 
+    # Zaman ekseni yoksa forecasting anlamsız → tabloya düş.
+    has_time = config.time_col is not None and config.time_col in frame.columns
+    if modality is Modality.TIMESERIES and not has_time:
+        warnings.append(
+            "timeseries işaretleri var ama geçerli time_col yok → tablo modalitesine düşüldü. "
+            "Zaman serisi için time_col verin."
+        )
+        modality = Modality.TABULAR
+
     columns = build_column_profiles(frame, target=config.target, thr=thr, sampled=sampled)
     target_profile = next(c for c in columns if c.name == config.target)
     target_summary = build_target_summary(frame[config.target], config.task_hint)
@@ -58,20 +67,16 @@ def analyze(dataset: Dataset, config: RunConfig) -> tuple[DataProfile, TaskSpec]
 
     timeseries = None
     if modality is Modality.TIMESERIES:
-        if config.time_col is None or config.time_col not in frame.columns:
-            warnings.append(
-                "timeseries modalitesi ama geçerli time_col yok — TS tanısı atlandı."
-            )
-        else:
-            ts_profile, ts_warn = diagnose_timeseries(
-                frame,
-                target=config.target,
-                time_col=config.time_col,
-                group_col=config.group_col if config.group_col in frame.columns else None,
-                config=config.analyzers.timeseries,
-            )
-            timeseries = ts_profile
-            warnings.extend(ts_warn)
+        assert config.time_col is not None
+        ts_profile, ts_warn = diagnose_timeseries(
+            frame,
+            target=config.target,
+            time_col=config.time_col,
+            group_col=config.group_col if config.group_col in frame.columns else None,
+            config=config.analyzers.timeseries,
+        )
+        timeseries = ts_profile
+        warnings.extend(ts_warn)
 
     leakage_suspects = scan_leakage(
         frame,

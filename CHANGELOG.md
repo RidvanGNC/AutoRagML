@@ -9,6 +9,18 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 ## [Unreleased]
 
 ### Eklendi
+- **`preprocessors/` katmanı kodlandı** (ADR 0011): `FeaturePipeline.from_plan(plan, candidate_choices)` → leakage-safe dönüşüm zinciri.
+  - `base.py` — `SklearnColumnTransform` (kolon alt kümesine sklearn transformer; `cross_fitted` → `fit_transform` cross-fitting / `apply` full-train)
+  - `catalog.py` — op → transform: impute · onehot/ordinal/**target_encode**(sklearn iç cross-fitting)/hashing · scale · yeo_johnson · quantile
+  - `stateless.py` — drop / date_expand / log1p (işaretli) / hashing (CRC32 deterministik)
+  - `pipeline.py` — sıralı zincir (drop→recipe→date_expand→impute→encode→numeric); `fit_transform` her adımda cross-fitting'i korur
+  - `target.py` — `TargetTransform` (none/log1p/yeo_johnson/quantile; forward/inverse)
+- `autoragml/transform.py`: `Transform.fit_transform` protokole eklendi + `BaseTransform`.
+- `tests/unit/preprocessors/` — 16 test (target-encode sızıntı: cross-fit ≠ full-train, test target'ına dokunmaz; unseen kategori; target roundtrip).
+
+### Değişti
+- `analyzers.analyze`: modality=timeseries ama geçerli `time_col` yoksa **tabloya düşer** (forecasting zaman ekseni olmadan anlamsız).
+- mypy override: `sklearn.*` (py.typed yok).
 - **`dynamics/` katmanı kodlandı** (ADR 0007+0010+0015): `build_plan(DataProfile, TaskSpec, RunConfig) -> AdaptivePlan`.
   - `planner.py` — `committed_ops` (yapısal drop / date_expand / encode-by-cardinality / impute / recipe refleri) + `candidate_ops` (heavy_tailed_numeric + target grupları; hedef negatifse log1p elenir) + `structure` auto (per_group_champion eşiği) + `row_policies` (intermittent_augment/filter_low_activity/coldstart_split) + `regimes` (scenario_2) + `family_policy`
   - `recipes/` — registry: `@register_recipe` + `load_recipe_paths` + entry-points (`autoragml.recipes`); isim çakışması → `RecipeError`; `validate_recipes` plan-zamanı fail-fast
