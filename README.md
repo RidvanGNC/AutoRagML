@@ -59,3 +59,6 @@ python -m venv .venv && . .venv/Scripts/activate   # Windows
 pip install -e ".[dev,timeseries]"
 ruff check . && mypy && pytest
 ```
+
+**macOS:** LightGBM'in çalışması için OpenMP runtime gerekir — `brew install libomp`
+(kurulu değilse `lightgbm` sessizce aday havuzundan düşer, log'da uyarı çıkar).

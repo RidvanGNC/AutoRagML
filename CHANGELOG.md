@@ -9,6 +9,11 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 ## [Unreleased]
 
 ### Düzeltildi
+- **CI macOS:** `brew install libomp` adımı eklendi — LightGBM'in OpenMP runtime'ı olmadan
+  import edilemiyordu → registry `lightgbm`'i düşürüyor → 7 test (`test_tuners`, `test_estimator`,
+  `test_registry`, `test_runner`) macos-latest'te patlıyordu.
+- `models/registry`: "paket kurulu ama import patlıyor" durumu artık gerçek hatayı log'a yazıyor
+  (`_import_hint`), sadece "importable değil" demiyor.
 - CI: `actions/checkout@v4→v5`, `actions/setup-python@v5→v6` (Node 20 deprecation uyarısı; yeni sürümler Node 24 native).
 - `test_timeseries_and_leakage.py`: `DatetimeIndex + pd.Timedelta` aritmetiği ayrı `date_range` ile değiştirildi (NumPy 2.5 "generic timedelta unit" DeprecationWarning).
 

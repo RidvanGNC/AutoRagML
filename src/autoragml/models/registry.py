@@ -78,6 +78,19 @@ def _requires_available(requires: list[str]) -> list[str]:
     return [r for r in requires if importlib.util.find_spec(r) is None]
 
 
+def _import_hint(paths: list[str]) -> str:
+    """Paketi kurulu ama import'u patlıyorsa (ör. macOS'ta libomp'suz lightgbm) gerçek hatayı yüzeye çıkar."""
+    for path in paths:
+        top = path.split(".")[0]
+        if importlib.util.find_spec(top) is None:
+            continue
+        try:
+            importlib.import_module(path.rpartition(".")[0] or top)
+        except Exception as exc:  # noqa: BLE001
+            return f" — `{top}` kurulu ama import edilemedi: {exc}"
+    return ""
+
+
 def _build_candidate(key: str, entry: JsonDict, *, source: CandidateSource) -> Candidate | None:
     if entry.get("enabled", True) is False:
         return None
@@ -100,7 +113,7 @@ def _build_candidate(key: str, entry: JsonDict, *, source: CandidateSource) -> C
         return None
 
     if not any(_class_exists(p) for p in paths):
-        _warn_once(key, f"model `{key}` atlandı — class_path importable değil: {paths}")
+        _warn_once(key, f"model `{key}` atlandı — class_path importable değil: {paths}{_import_hint(paths)}")
         return None
 
     try:
