@@ -11,15 +11,42 @@ olmadan katmanlar birbirine sızar. Sıra: contracts → config → io → analy
 
 ## Nesneler (ilk taslak alanlar)
 
-### RunConfig  (`config/` üretir)
-- `task_hint`, `modality_hint` (opsiyonel — analyzers doğrular/doldurur)
-- `target`, `group_col`, `time_col` (opsiyonel)
-- `budget`: `{ mode: time|trials, value, per_fold_seconds }`
-- `split_policy`: `{ kind: holdout|kfold|group_kfold|rolling_origin|fixed_window, ... }`
-- `primary_metric`, `metric_by_class` (opsiyonel)
-- `output_dir`, `project_name`, `seed`
-- `engines`: aktif engine + opsiyonel override
-- `tracking`: `{ backend: none|jsonl|mlflow, ... }`
+### RunConfig  (`config/` üretir · alanlar DONDU — ADR 0008)
+
+Serialize edilebilir (pydantic v2). **Sır taşımaz** — yalnız `*_env` adları.
+
+| Alan | Tip | Default | Not |
+|---|---|---|---|
+| `target` | `str` | — | **Zorunlu.** v1'de çıkarım yok (ADR 0008/3) |
+| `time_col` | `str \| None` | `None` | forecasting task'inde **zorunlu** |
+| `group_col` | `str \| None` | `None` | yoksa pooled; varsa per-group champion mümkün |
+| `task_hint` | `str \| None` | `None` | `analyzers` doğrular; çelişkide hata |
+| `modality_hint` | `str \| None` | `None` | v1: `tabular` \| `timeseries` |
+| `project_name` | `str` | `"autoragml"` | çıktı klasör adında kullanılır |
+| `output_dir` | `path` | `"outputs"` | `persistence` alt yapı kurar |
+| `seed` | `int` | `42` | |
+| `autopilot` | `bool` | `False` | **v1'de sabit false.** v2: analyzers her şeye karar verir |
+| **`budget`** | obj | ↓ | ADR 0008/1 — sessiz kesme yok |
+| `budget.total_max_seconds` | `int \| None` | `None` | global wall-clock tavan |
+| `budget.per_model_max_seconds` | `int \| None` | `None` | `None` → trial sayısı yönetir |
+| `budget.max_trials_per_model` | `int` | `15` | |
+| `budget.min_trials_per_model` | `int` | `3` | guardrail |
+| `budget.per_fold_timeout_seconds` | `int \| None` | `None` | `None` → fold iptali yok |
+| `budget.runtime_projection_warn_seconds` | `int` | `7200` | ilk fold sonrası tahmini toplam bunu aşarsa **uyar, devam et** |
+| **`split_policy`** | obj \| None | `None` | **kısmi** — verilen alan kazanır, gerisi `analyzers.SplitRecommendation` |
+| `split_policy.kind` | enum \| None | `None` | holdout \| kfold \| stratified_kfold \| group_kfold \| time_series \| rolling_origin \| fixed_window |
+| `split_policy.*` | — | — | kind'e özel: `n_folds`, `horizon`, `step`, `min_train_periods`, `test_size`... |
+| `primary_metric` | `str \| None` | `None` | `None` → task'e göre varsayılan |
+| `metric_by_class` | `dict \| None` | `None` | intermittent routing (Smooth→wmape, ...) |
+| `scenarios` | `list[str]` | `["scenario_1"]` | TS engine; `scenario_2` opt-in |
+| `guardrails` | obj | `{enabled: true}` | eşikler `scoring` varsayılanından |
+| `engines` | obj \| None | `None` | aktif engine + override; `None` → analyzers seçer |
+| `tracking.backend` | enum | `"jsonl"` | none \| jsonl \| mlflow |
+| `tracking.uri_env` | `str \| None` | `None` | mlflow için env-var **adı** |
+| `llm` | obj \| None | `None` | v2. `{provider, model, endpoint_env, api_key_env}` — sır yok |
+
+**Ayrı katman — `Settings`** (`config/settings.py`, pydantic-settings): `.env`'den okur,
+`SecretStr` alanları, **asla serialize edilmez**. `RunConfig.*_env` adları burada çözülür.
 
 ### Dataset  (`io/` üretir)
 - `handle`: lazy referans (df | dosya yolu | klasör)

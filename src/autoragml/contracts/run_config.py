@@ -1,5 +1,4 @@
-"""contracts.run_config
+"""contracts.run_config -- RunConfig (pydantic v2). Alanlar DONDU: ADR 0008 + docs/architecture/01_contracts.md.
 
-Durum: taslak. Alanlar mimari dokümanda (docs/architecture/01_contracts.md) tartışılıyor;
-kesinleşmeden pydantic modeli yazılmayacak.
+Sir tasimaz -- yalniz *_env adlari. Implementasyon: sozlesme tablosu onaylandi, kod bir sonraki adim.
 """

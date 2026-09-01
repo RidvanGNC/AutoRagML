@@ -12,7 +12,13 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 - ADR 0007: `dynamics` = deterministik `planner` + custom `recipes/` plug-point + v2 `synthesis`.
 - `dynamics/` alt iskele: `planner.py`, `recipes/`, `synthesis.py` (docstring stub).
 
+### Eklendi
+- ADR 0008: `RunConfig` varsayılanları + çıkarım politikası (cömert bütçe / sessiz kesme yok; katmanlı split + v2 autopilot; v1'de açık target/time/group; sırlar yalnız `.env`).
+- `RunConfig` alan tablosu `01_contracts.md`'de **donduruldu**.
+- Stub: `config/settings.py` (pydantic-settings, `.env`), `contracts/run_config.py`.
+
 ### Değişti
+- `01_contracts.md`: `RunConfig` bölümü bullet listeden tam alan tablosuna geçti.
 - `docs/architecture/01_contracts.md`: `AdaptivePlan` artık recipe referansı taşıyor; 3 açık soru ADR 0007 ile kapandı.
 - `docs/architecture/02_layers.md`: `dynamics/` bölümü ADR 0007'ye göre güncellendi.
 
