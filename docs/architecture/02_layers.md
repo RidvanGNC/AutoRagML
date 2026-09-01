@@ -11,11 +11,17 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
 - Katmanlı merge: varsayılan ← preset ← kullanıcı dosyası ← runtime override
 - Zorunlu alan yok; boş config akıllı varsayılanla çalışır (analyzers doldurur)
 
-## io/
-- **Girdi:** dosya yolu / DataFrame / klasör
-- **Çıktı:** `Dataset` (lazy handle, schema, fingerprint)
-- Yükleyiciler: table (csv/parquet/df), image-folder, audio-folder, text, multimodal
-- Bulut: `fsspec` opsiyonel; büyük medyayı RAM'e almaz
+## io/  (ADR 0009)
+- **Girdi:** DataFrame · `.csv` · `.parquet` · csv/parquet klasörü · (opsiyonel) DB (`[db]`)
+- **Çıktı:** `Dataset`
+- Sorumluluklar:
+  - kaynak boyut yoklaması → eager/lazy karar (`RunConfig.io.eager_max_bytes`)
+  - şema çıkarımı; `n_rows` **tam sayım**
+  - wide → long `melt` (tespit + log; `layout` işaretle)
+  - **strict fingerprint**: kanonik form üzerinden tek streaming geçişte SHA256
+  - DB adaptörü opsiyonel (SQLAlchemy)
+- v1: yalnız `modparts.tabular`. `relations` alanı `None` (rezerve).
+- Bulut: `fsspec` opsiyonel.
 
 ## analyzers/  (deterministik "perception")
 - **Girdi:** `Dataset` + `RunConfig`

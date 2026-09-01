@@ -48,11 +48,24 @@ Serialize edilebilir (pydantic v2). **Sır taşımaz** — yalnız `*_env` adlar
 **Ayrı katman — `Settings`** (`config/settings.py`, pydantic-settings): `.env`'den okur,
 `SecretStr` alanları, **asla serialize edilmez**. `RunConfig.*_env` adları burada çözülür.
 
-### Dataset  (`io/` üretir)
-- `handle`: lazy referans (df | dosya yolu | klasör)
-- `schema`: kolon → dtype
-- `n_rows`, `modparts`: `{ tabular?, image_dir?, audio_dir?, text_col? }`
-- `fingerprint`: içerik hash (RunManifest'e girer)
+### Dataset  (`io/` üretir · alanlar DONDU — ADR 0009)
+
+| Alan | Tip | Not |
+|---|---|---|
+| `source` | obj | `{kind: dataframe\|csv\|parquet\|csv_dir\|parquet_dir\|db, ref}` |
+| `schema` | `dict[str, dtype]` | kolon → dtype |
+| `shape` | `(n_rows, n_cols)` | `n_rows` **her zaman tam sayım** (lazy'de bile — tahmin yok) |
+| `materialization` | `"eager" \| "lazy"` | otomatik: boyut `RunConfig.io.eager_max_bytes` eşiği |
+| `handle` | ref | eager: DataFrame · lazy: pyarrow dataset / chunk iterator |
+| `layout` | `"long" \| "wide_converted" \| "single_series" \| "n/a"` | TS için; wide → auto-melt (loglanır) |
+| `fingerprint` | `str` (SHA256) | **STRICT** — kanonik form üzerinden tüm hücreler; tek streaming geçiş |
+| `fingerprint_spec` | `str` | nasıl hesaplandığı (sıralama anahtarı, şema normalizasyonu) |
+| `fingerprint_fast` | `str \| None` | structural — yalnız hızlı drift sinyali, **kimlik değil** |
+| `modparts` | obj | v1: `{tabular}`. v1.1+: `image_dir`, `audio_dir`, `text_col` |
+| `relations` | `None` | **REZERVE** (ADR 0009/3) — çok-tablo join spec; v1'de hep `None` |
+
+Wide girdi → yalnız hedef geçmişi; exogenous feature yok, aday model havuzu
+baseline + univariate reduction ile **sınırlı** (`analyzers` `layout`'a bakıp kısıtlar).
 
 ### DataProfile  (`analyzers/` üretir)
 - `columns[]`: `{ name, dtype, role (numeric|categorical|datetime|text|id|target),

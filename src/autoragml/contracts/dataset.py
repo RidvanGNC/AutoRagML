@@ -1,5 +1,5 @@
-"""contracts.dataset
+"""contracts.dataset -- Dataset (pydantic v2). Alanlar DONDU: ADR 0009 + 01_contracts.md.
 
-Durum: taslak. Alanlar mimari dokümanda (docs/architecture/01_contracts.md) tartışılıyor;
-kesinleşmeden pydantic modeli yazılmayacak.
+fingerprint STRICT (tum hucreler, kanonik form, tek streaming gecis). layout: long kanonik,
+wide -> auto-melt. relations REZERVE (v1: None). Implementasyon bir sonraki adim.
 """

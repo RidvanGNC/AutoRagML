@@ -7,6 +7,15 @@ rolling-origin backtest → guardrail'li çok-metrikli skorlama → per-group ch
 **tek dikeyden çıkarıp** modalite-agnostik, config-driven, tool-usable bir pakete
 dönüştürmek.
 
+## Motto
+
+> Zamanın miktarı önemsiz, **sağlıklı başarı** kesin ölçüdür. Detaylar önemlidir ve
+> kaçırılması söz konusu değildir.
+
+Hız/kısa yol uğruna doğruluktan taviz yok. Kesinlik gereken yerde yaklaşık yöntem yok
+(ör. `fingerprint` strict, örneklem değil). Kenar durumlar ve genişleme dikişleri
+tasarımda şimdi düşünülür; v1 kapsamı gereksiz şişirilmez.
+
 ## İlkeler
 
 1. **Deterministik çekirdek.** v1'de LLM/agent yok. Bileşen orkestrasyonu →
