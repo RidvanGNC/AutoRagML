@@ -13,7 +13,7 @@ from pathlib import Path
 from autoragml.contracts.run_config import RunConfig
 from autoragml.exceptions import PersistenceError
 
-_SUBDIRS = ("models", "evaluation", "reports", "config_snapshot")
+_SUBDIRS = ("models", "evaluation", "reports", "config_snapshot", "tracking")
 
 
 @dataclass(frozen=True)
@@ -25,6 +25,7 @@ class RunPaths:
     evaluation: Path
     reports: Path
     config_snapshot: Path
+    tracking: Path
 
     @property
     def manifest(self) -> Path:
@@ -72,4 +73,5 @@ def create_run_dir(
         evaluation=root / "evaluation",
         reports=root / "reports",
         config_snapshot=root / "config_snapshot",
+        tracking=root / "tracking",
     )

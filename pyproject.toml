@@ -33,7 +33,7 @@ catboost   = ["catboost>=1.2"]
 timeseries = ["statsforecast>=1.7"]           # v1: AutoARIMA/AutoETS/MSTL/Theta
 hpo        = ["optuna>=3.5"]
 tracking   = ["mlflow>=2.10"]
-report     = ["jinja2>=3.1", "matplotlib>=3.7"]
+report     = ["matplotlib>=3.7"]           # HTML/MD/CSV bağımlılıksız; extra yalnız PNG grafikler
 explain    = ["shap>=0.44"]
 
 # LLM sağlayıcıları (v2 RAG/agent katmanı için — çekirdek bunlara bağlı değil)
@@ -56,6 +56,7 @@ dev = [
     "pandas-stubs>=2.2",
     "sqlalchemy>=2.0",
     "optuna>=3.5",
+    "matplotlib>=3.7",
 ]
 
 [project.scripts]
@@ -85,7 +86,7 @@ mypy_path = "src"
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["pyarrow.*", "sklearn.*", "scipy.*", "joblib.*"]
+module = ["pyarrow.*", "sklearn.*", "scipy.*", "joblib.*", "mlflow.*", "matplotlib.*"]
 ignore_missing_imports = true
 
 [tool.pydantic-mypy]

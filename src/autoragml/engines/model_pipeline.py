@@ -73,3 +73,8 @@ class FittedModelPipeline:
     @property
     def feature_cols(self) -> list[str]:
         return list(self._feature_cols)
+
+    @property
+    def estimator(self) -> Any:
+        """Fitted tahminci — introspection (feature importance, explain) için salt-okunur."""
+        return self._estimator

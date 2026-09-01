@@ -176,14 +176,21 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
   selection/comparison_tests + opsiyonel fold/holdout); `persist_config_snapshot` (**`.env` asla**)
 - yeni: `exceptions.PersistenceError`; nihai holdout tek-seferlik skorlama → orchestrator (ADR 0020)
 
-## reporters/
-- **Girdi:** contract nesneleri + `RunManifest`
-- **Çıktı:** dosyalar (MD/HTML her zaman; PDF/xlsx opsiyonel)
-- EDA raporu, model card, karşılaştırma tablosu, actual-vs-pred / fold / importance grafikleri
+## reporters/  (ADR 0019 — KOD YAZILDI)
+- **Girdi:** `EngineResult` + `RunManifest` + `RunPaths` (+ opsiyonel `reports`)
+- **Çıktı:** `write_reports(...) -> dict[str,str]` (artifacts) — `paths.reports/` içine
+- `run_report.html` (**her zaman**, tek dosya, CDN/harici asset yok, `html.escape`),
+  `model_card.md` (**her zaman**, Mitchell bölümleri; oto + `TODO` placeholder),
+  `leaderboard.csv` (**her zaman**, `scoreboard_to_frame`)
+- `plots/*.png` yalnız `[report]` extra (matplotlib) varsa; yoksa atlanır (WARNING) — akışı kırmaz
+- Deterministik: zaman yalnız `manifest.created_at`; `pipeline is None` → importance atlanır
 
-## tracking/  (opsiyonel)
-- Protokol: `on_run_start / log_params / log_metrics / log_artifact / on_run_end`
-- `JsonlTracker` varsayılan (bağımlılıksız), `MlflowTracker` opsiyonel, kapalı = no-op
+## tracking/  (ADR 0019 — KOD YAZILDI, opsiyonel)
+- Protokol `Tracker`: `start_run / log_params / log_metrics / log_artifact / end_run`
+- `resolve_tracker(config, run_dir)` → `NullTracker` (none) · `JsonlTracker` (varsayılan,
+  `tracking/events.jsonl` + `summary.json`, bağımlılıksız, **ağsız**) · `MlflowTracker`
+  (`[tracking]` extra — yoksa `ConfigError`, sessizce jsonl'a düşmez)
+- `persistence.RunPaths.tracking` alt dizini eklendi
 
 ## llm/  (v2 — şimdilik iskele)
 - `LLMProvider`: `complete`, `stream`, `embed`

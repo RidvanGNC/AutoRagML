@@ -18,6 +18,18 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 - `test_timeseries_and_leakage.py`: `DatetimeIndex + pd.Timedelta` aritmetiği ayrı `date_range` ile değiştirildi (NumPy 2.5 "generic timedelta unit" DeprecationWarning).
 
 ### Eklendi
+- **`reporters/` + `tracking/` katmanları kodlandı** (ADR 0019 — grup: bağımlılıksız çıktı/gözlem sink'leri).
+  - `reporters.write_reports(engine_result, manifest, paths, ...)` → `paths.reports/`: `run_report.html`
+    (**her zaman**, tek dosya, CDN yok, `html.escape`), `model_card.md` (**her zaman**, Mitchell bölümleri
+    + `TODO` placeholder), `leaderboard.csv` (**her zaman**). `plots/*.png` yalnız `[report]` extra varsa
+    (yoksa WARNING, akış kırılmaz).
+  - `tracking`: `Tracker` protokolü (`start_run/log_params/log_metrics/log_artifact/end_run`);
+    `resolve_tracker(config, run_dir)` → `NullTracker` (none) · `JsonlTracker` (varsayılan, `events.jsonl`
+    + `summary.json`, bağımlılıksız/ağsız) · `MlflowTracker` (`[tracking]` extra — yoksa `ConfigError`).
+- Sözleşme: `persistence.RunPaths.tracking` alt dizini; `FittedModelPipeline.estimator` salt-okunur property.
+- `report` extra'dan `jinja2` çıkarıldı (HTML bağımlılıksız); `dev` + mypy override'a `matplotlib`/`mlflow`.
+- `tests/unit/{tracking,reporters}/` — 9 test (JSONL tam döngü + determinizm, resolver, HTML self-contained,
+  model card bölümleri, plot üretimi).
 - **`persistence/` katmanı kodlandı** (ADR 0018): `persist_run(config, dataset, engine_result, ...) ->
   (RunPaths, RunManifest)` — yan etkisi olan katman.
   - `paths.create_run_dir` → `<output_dir>/<DDMMYYYY>_<proje>_outputs/<run_id>/` (`run_id = UTC
