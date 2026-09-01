@@ -1,5 +1,4 @@
-"""contracts.task_spec
-
-Durum: taslak. Alanlar mimari dokümanda (docs/architecture/01_contracts.md) tartışılıyor;
-kesinleşmeden pydantic modeli yazılmayacak.
+"""contracts.task_spec -- TaskSpec. task enum (v1 hepsi): regression / binary_classification /
+multiclass_classification / multilabel_classification / quantile_regression / ordinal_regression /
+forecasting. Alanlar dondu (ADR 0010).
 """

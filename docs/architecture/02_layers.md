@@ -23,12 +23,15 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
 - v1: yalnız `modparts.tabular`. `relations` alanı `None` (rezerve).
 - Bulut: `fsspec` opsiyonel.
 
-## analyzers/  (deterministik "perception")
+## analyzers/  (deterministik "perception" — ADR 0010)
 - **Girdi:** `Dataset` + `RunConfig`
 - **Çıktı:** `DataProfile` + `TaskSpec`
-- Alt: `modality`, `task_inference`, `profiling`, `quality`, `timeseries` (freq,
-  seasonality, ADI/CV² intermittency, regime ipuçları)
-- **Model eğitmez.**
+- İç sıra: `modality.detect` → `profiling.build` (ColumnProfile: raw_dtype +
+  special_types + semantic_role + flags) → `task_inference.infer` →
+  `timeseries.diagnose` (infer_freq + freq→periyot sözlüğü + ACF/STL doğrulama;
+  per-series ADI/CV² + intermittency **ölçümü**) → `quality.scan` + `leakage.scan`
+- **Model eğitmez, fit etmez.** `provenance == "full"` görür.
+- Düşük güven → WARNING, akış durmaz.
 
 ## dynamics/  (veriye-özel strateji — ADR 0007)
 - `planner.py` — **Girdi:** `DataProfile` + `TaskSpec` + `RunConfig` · **Çıktı:** `AdaptivePlan`
@@ -39,11 +42,12 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
   içinde doğrular → `recipes/`'e kaydeder. v1'de yok.
 - Custom kod modele değil, pipeline'a girer; fit yalnız train fold'unda (`validators`).
 
-## preprocessors/
-- **Girdi:** `AdaptivePlan` + train fold
-- **Çıktı:** fitted `Preprocessor` (transform uygulanabilir)
-- Leakage-safe: fit yalnız train'de, `validators` içinden
-- Serialize edilebilir → `ModelBundle`
+## preprocessors/  (ADR 0011 — leakage-safe by construction)
+- **Girdi:** `AdaptivePlan` (`committed_ops` + seçilmiş `candidate_ops`) + train fold
+- **Çıktı:** `FittedTransform` (immutable)
+- Üç ilkel ayrı: stateless `transform` / `fit(train_frame)` / `apply(X)`
+- `fit`'i **yalnız `validators`** çağırır; split sınırını görmez
+- `provenance_fitted_on` kaydı; `serialize()` → `ModelBundle`
 
 ## models/ + registry
 - **Girdi:** `TaskSpec` + `AdaptivePlan` + `RunConfig`
@@ -58,13 +62,17 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
 - Backend: RandomSearch (çekirdek), Optuna (opsiyonel), FLAML-CFO (opsiyonel)
 - Early stopping: (a) model-içi (xgb/lgbm rounds), (b) arama-seviyesi (plateau/bütçe)
 
-## validators/
-- **Girdi:** `Candidate` (tuned) + `Dataset` + `AdaptivePlan` + split policy
+## validators/  (ADR 0010/6 + 0011 — split sınırını yöneten TEK yer)
+- **Girdi:** `Candidate` + `Dataset` + `AdaptivePlan` + split policy
 - **Çıktı:** `ValidationReport`
 - Split: holdout, kfold, stratified, group, TimeSeriesSplit, RollingOrigin, FixedWindow
-- Fold döngüsü: preprocessors.fit(train) → model fit (early stop) → predict(test) → metrik
-- Fold-güvenli regime/dynamics fit
-- `leakage_checks`: tarih örtüşmesi, shift, target-türevli feature
+- **Nested CV**: HPO + `candidate_ops` seçimi + (opsiyonel) feature selection **iç
+  resample**'da; dış fold yalnız skorlar (multi-test leakage yok)
+- Feature selection etkinse → iç-fold **konsensüs** (cnCV)
+- Dış fold döngüsü: `FittedTransform.fit(train)` → model fit (early stop) →
+  `apply(test)` → predict → metrik. Regime/dynamics fit de fold içinde.
+- `leakage_checks` 3 kategori: `overlap` (satır/zaman örtüşmesi) · `preprocessing`
+  (split öncesi fit) · `multi_test` (dış test'te seçim) → **BLOCK**
 
 ## scoring/
 - **Girdi:** `[ValidationReport]` + `RunConfig` + (opsiyonel) routing/demand-class

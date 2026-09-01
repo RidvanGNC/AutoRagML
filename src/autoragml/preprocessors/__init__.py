@@ -1,4 +1,7 @@
-"""preprocessors — fit/transform transformları (impute/encode/scale/date-expand/...). Leakage-safe: fit yalnız train fold'unda, validators içinden çağrılır.
+"""preprocessors -- leakage-safe by construction (ADR 0011).
 
-Durum: iskele — sözleşmeler kesinleşmeden implementasyon yok.
+FittedTransform protokolu: stateless transform / fit(train_frame)->immutable / apply(X).
+fit'i yalniz validators cagirir; split sinirini gormez. provenance_fitted_on kaydi.
+
+Durum: iskele.
 """

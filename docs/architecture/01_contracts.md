@@ -67,31 +67,67 @@ Serialize edilebilir (pydantic v2). **Sır taşımaz** — yalnız `*_env` adlar
 Wide girdi → yalnız hedef geçmişi; exogenous feature yok, aday model havuzu
 baseline + univariate reduction ile **sınırlı** (`analyzers` `layout`'a bakıp kısıtlar).
 
+### ColumnProfile  (`analyzers/profiling.py` — alanlar DONDU, ADR 0010)
+
+AutoGluon `FeatureMetadata` deseniyle hizalı: raw dtype + special types ayrımı.
+
+| Alan | Tip | Not |
+|---|---|---|
+| `name` | `str` | |
+| `raw_dtype` | enum | `int \| float \| category \| object \| datetime \| bool` |
+| `special_types` | `set[str]` | `text · text_ngram · datetime · embedded_number · boolean` (0..n) |
+| `semantic_role` | enum | `target · id · categorical · numeric_continuous · numeric_discrete · boolean · datetime · text · constant · unknown` |
+| `flags` | `set[str]` | `high_cardinality · near_constant · high_missing · all_missing · skewed · heavy_tailed · zero_inflated · datetime_like_string · numeric_like_string · duplicate_of:<col> · monotonic · leakage_suspect` |
+| `n_unique` / `missing_ratio` | | |
+| `stats` | obj | numeric: `min/max/mean/std/skew/kurtosis`; kategorik: `top_values`; `sample_values` |
+| `confidence` | `float` | düşük → WARNING (akış durmaz) |
+| `inference_source` | enum | `rule \| user_override \| ml_detector(gelecek)` |
+
 ### DataProfile  (`analyzers/` üretir)
-- `columns[]`: `{ name, dtype, role (numeric|categorical|datetime|text|id|target),
-  cardinality, missing_ratio, skew, n_unique }`
-- `target_summary`: dağılım, dengesizlik, sınıf sayısı
-- `timeseries?`: `{ freq, gaps, seasonality[], stationarity, adi, cv2, intermittent_class }`
-- `leakage_suspects[]`: hedefle ~mükemmel ilişkili kolonlar
-- `quality_flags[]`
+- `columns: list[ColumnProfile]`
+- `n_rows`, `n_cols`
+- `target_profile`: hedefin `ColumnProfile`'ı + `target_summary` (`n_classes`,
+  sınıf dengesi, dağılım, `zero_ratio`)
+- `timeseries: TimeSeriesProfile | None`
+- `quality_flags[]`: dataset düzeyi (`duplicate_rows`, `constant_target`, `tiny_data`,
+  `severe_imbalance`, ...)
+- `leakage_suspects[]`: `{ column, reason, confidence }` (ADR 0011/5 — yumuşak, WARNING)
+- `confidence`: genel çıkarım güveni
+
+### TimeSeriesProfile  (`analyzers/timeseries.py` — ADR 0010)
+- `freq` (`pandas.infer_freq` sıralı per-series; düzensizse modal-gap) · `freq_confidence`
+- `span` · `regular: bool` · `gaps[]` (grup bazında eksik dönemler)
+- `seasonality[]`: `[{period, strength}]` — freq→periyot sözlüğü + ACF/STL doğrulama
+- `trend_strength` · `stationarity` (ADF p)
+- `per_series[]`: grup bazında `{ n_obs, n_nonzero, zero_ratio, adi, cv2, history_weeks,
+  intermittency_class, intermittency_class_recent, class_changed_over_time }`
+- `classification_scheme`: `"sbc" | "kh"` (default `sbc`)
+- `per_series_detail`: `full | sampled | summary_only` (default `full`)
+- **Not:** intermittency sınıfı router **değil** — aday havuzunu genişletir + birincil
+  metriği etkiler; nihai seçim holdout (ADR 0010).
 
 ### TaskSpec  (`analyzers/` üretir)
-- `task`: classification | regression | forecasting | (v1.1+ ...)
-- `modality`: tabular | timeseries | (v1.1+ text|image|audio|mixed)
-- `targets[]`, `horizon?`, `group_col?`, `time_col?`
+- `task`: `regression | binary_classification | multiclass_classification |
+  multilabel_classification | quantile_regression | ordinal_regression | forecasting`
+- `modality`: `tabular | timeseries` (v1.1+ `text|image|audio|mixed`)
+- `targets[]`, `horizon?`, `group_col?`, `time_col?`, `quantiles?`
+- `inference_confidence` + `inference_warnings[]`
 
-### AdaptivePlan  (`dynamics/planner.py` üretir — deterministik, ADR 0007)
-Deklaratif ve serialize edilebilir (sözlük). Kod taşımaz; **referans** taşır.
-- `column_ops`: kolon → [op]. Op iki tür:
-  - **katalog op** (sabit): `target_encode`, `hashing`, `winsorize`, `log1p`,
-    `date_expand`, `text_embed`, `drop`, `impute:<strategy>`
-  - **recipe referansı**: `recipe:"<registry_adı>"` → `dynamics/recipes/` içinde kayıtlı,
-    `preprocessors` arayüzüne uyan custom transform (v1: elle yazılır; v2: `synthesis.py` üretir)
-- `row_policies`: [`filter_low_activity`, `coldstart_split`, `intermittent_route:<pipeline>`]
-- `structure`: `{ pooled | per_group_champion }`, `target_transform?`
-- `regimes?`: senaryo/regime tanımları — **fit'i `validators` yönetir** (fold-güvenli),
-  plan yalnız tanımı taşır
-- `recipes_used[]`: bu planın referansladığı recipe adları (RunManifest'e girer)
+### AdaptivePlan  (`dynamics/planner.py` üretir — deterministik, ADR 0007 + 0010)
+Deklaratif, serialize edilebilir. Kod taşımaz; **referans** taşır.
+
+- **`committed_ops`**: kolon → [op], **her zaman uygulanır** (yapısal):
+  `drop` (constant/duplicate/all-null/monotonic-id), `date_expand`, kategorik `encode`
+- **`candidate_ops`**: kolon/hedef → [op seçenekleri], **CV ile seçilir** (ADR 0010):
+  `log1p | yeo_johnson | quantile | none`; hedef dönüşümü `TransformedTargetRegressor` sarımı
+- **recipe referansı**: `committed_ops`/`candidate_ops` içinde `recipe:"<ad>"` →
+  `dynamics/recipes/` kayıtlı custom transform (`FittedTransform` protokolü, ADR 0011)
+- `row_policies`: `filter_low_activity`, `coldstart_split`, `intermittent_augment:<class>`
+  (havuz genişletir — route/kısıtla değil)
+- `structure`: `pooled | per_group_champion`
+- `regimes?`: tanım taşır; **fit'i `validators` yönetir** (fold-güvenli, ADR 0011/2)
+- `family_policy`: model ailesine göre op yoğunluğu (ağaç → minimal, lineer → kapsamlı)
+- `recipes_used[]` → RunManifest'e girer
 
 ### Candidate (ModelSpec)  (`models/` + `registry/` üretir)
 - `key`, `factory(params) -> estimator`, `param_space`, `family`
@@ -103,8 +139,11 @@ Deklaratif ve serialize edilebilir (sözlük). Kod taşımaz; **referans** taş�
 
 ### ValidationReport  (`validators/` üretir)
 - `folds[]`: `{ fold_id, train_span, test_span, predictions_ref, metrics }`
-- `leakage`: `{ status: PASS|FAIL, violations[] }`
+- `leakage`: `{ status: PASS|FAIL, violations[] }` — 3 kategori: `overlap | preprocessing |
+  multi_test` (ADR 0011/5)
 - `oof_predictions_ref`
+- `nested`: HPO / `candidate_ops` seçimi iç resample'da yapıldı mı (ADR 0010/6);
+  dış fold yalnız skorlar
 
 ### ScoreBoard / SelectionResult  (`scoring/` üretir)
 - `rows[]`: `{ model_key, scenario, metrics_mean, guardrail_flags, is_quarantined,
@@ -124,19 +163,33 @@ Deklaratif ve serialize edilebilir (sözlük). Kod taşımaz; **referans** taş�
 - `artifacts`: tüm çıktı yolları
 - `autoragml_version`
 
-### Recipe (custom transform)  (`dynamics/recipes/` — ADR 0007)
-`preprocessors` ile aynı arayüz; ayrı contract nesnesi değil, bir **protokol**:
-- `fit(train_df, plan_ctx) -> self`
-- `transform(X) -> X'`
-- `get_params()` / serialize (joblib) — `ModelBundle`'a girer
-- registry'ye isimle kayıtlı; `AdaptivePlan.column_ops` içinden `recipe:"<ad>"` ile çağrılır
-- v1: insan yazar · v2: `dynamics/synthesis.py` (LLM) üretir, runner'da doğrular, kaydeder
+### FittedTransform protokolü  (`preprocessors` + `dynamics/recipes` — ADR 0011)
+Sızıntı yapısal olarak engellenir. Üç ayrı ilkel:
+- **stateless** `transform(X) -> X'` — parametre öğrenmez
+- **`fit(train_frame) -> FittedTransform`** — yalnız `provenance == "train"` frame'den
+  öğrenir; **immutable** nesne döndürür; split'ler arası yeniden kullanılamaz
+- **`apply(X) -> X'`** — öğrenilmiş parametreyi uygular, saf
+- `provenance_fitted_on` kaydı; `serialize()` → `ModelBundle`
+- `fit`'i **yalnız `validators`** çağırır (fold içinde); kullanıcı/recipe kodu split
+  sınırını görmez
+- registry'ye isimle kayıtlı; `AdaptivePlan` içinden `recipe:"<ad>"` ile çağrılır
+- v1: insan yazar · v2: `dynamics/synthesis.py` (LLM) üretir → runner'da doğrular → kaydeder
+
+### Frame provenance  (tüm katmanlar)
+Her veri frame'i `provenance: "train" | "val" | "test" | "full"` taşır.
+`analyzers` / `dynamics.planner` `"full"` görür (fit etmez). `validators` fold'da
+`"train"/"test"` üretir. `test`/`val`'dan fit edilmiş `FittedTransform`'un başka
+partition'a `apply`'ı → hata (ADR 0011/3-4).
 
 ## Açık sorular
 
 - ~~`dynamics` sınırı~~ → **çözüldü: ADR 0007** (planner + recipes + v2 synthesis)
 - ~~`AdaptivePlan` deklaratif mi kod mu~~ → **çözüldü: deklaratif sözlük, recipe referansı taşır**
 - ~~Fold-güvenli regime fit kim yönetir~~ → **çözüldü: `validators` fit eder, plan tanımı taşır**
+- ~~`dynamics` metodoloji (skew ile eleme?)~~ → **çözüldü: ADR 0010** (betimle→karar→fold'da fit; committed vs candidate ops)
+- ~~intermittency routing~~ → **çözüldü: ADR 0010** (ipucu — havuz genişletir + metrik; router değil)
+- ~~sızıntı önleme~~ → **çözüldü: ADR 0011** (fit/transform/apply, immutable, provenance, 3-kategori)
 - `plan_ctx`: recipe'e `fit` sırasında hangi bağlam verilir (group_col, time_col, target)?
 - Recipe registry: yalnız `dynamics/recipes/` klasörü mü, yoksa entry-points ile dış paket de mi?
+- `candidate_ops` seçim algoritması: her aday için ayrı iç-CV mi, yoksa tek geçişte mi?
 - Karışık modalite (v1.1+) `TaskSpec.modality = mixed` → çok engine + füzyon nasıl?

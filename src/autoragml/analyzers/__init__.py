@@ -1,4 +1,8 @@
-"""analyzers — veriyi anlama: modalite tespiti, task çıkarımı, profil, kalite, zaman serisi tanısı, sızıntı şüphesi. Model eğitmez; DataProfile + TaskSpec üretir.
+"""analyzers -- deterministik perception (ADR 0010).
 
-Durum: iskele — sözleşmeler kesinleşmeden implementasyon yok.
+modality.detect -> profiling.build -> task_inference.infer -> timeseries.diagnose
+-> quality.scan + leakage.scan  =>  DataProfile + TaskSpec
+Fit etmez; provenance=="full" gorur. Dusuk guven -> WARNING.
+
+Durum: iskele.
 """

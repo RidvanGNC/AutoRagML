@@ -1,4 +1,7 @@
-"""validators — split stratejileri (holdout/kfold/group/time/rolling-origin/fixed-window), CV koşucu, fold-güvenli leakage testi. ValidationReport üretir.
+"""validators -- split sinirini yoneten TEK yer (ADR 0010/6 + 0011).
 
-Durum: iskele — sözleşmeler kesinleşmeden implementasyon yok.
+Nested CV: HPO + candidate_ops secimi + feature selection ic resample'da; dis fold yalniz skorlar.
+leakage_checks 3 kategori: overlap / preprocessing / multi_test -> BLOCK.
+
+Durum: iskele.
 """
