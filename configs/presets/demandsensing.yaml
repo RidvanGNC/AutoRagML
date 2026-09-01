@@ -1,0 +1,4 @@
+# İlham kaynağı hattı yeniden üreten referans reçete (regresyon testi için).
+extends: timeseries_rolling
+project_name: demandsensing
+structure: per_group_champion

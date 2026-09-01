@@ -1,0 +1,17 @@
+AutoRagML
+=========
+
+Bu ürün üçüncü parti açık kaynak kod içerir / içerecektir. Aşağıdaki liste
+`src/autoragml/_vendor/` altına alınıp düzenlenen her parça için güncellenir.
+Her vendor edilen dosyanın başında ayrıca kaynak, orijinal telif ve
+"Modified by AutoRagML, <tarih>" notu bulunur.
+
+--------------------------------------------------------------------------------
+Planlanan (henüz eklenmedi):
+
+* AutoGluon (Apache License 2.0)
+  Copyright Amazon.com, Inc. or its affiliates.
+  https://github.com/autogluon/autogluon
+  Alınacak parça: weighted ensemble selection (Caruana et al. greedy forward
+  selection) ve problem-type çıkarımı yardımcıları.
+--------------------------------------------------------------------------------

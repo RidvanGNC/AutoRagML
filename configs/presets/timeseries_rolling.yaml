@@ -1,0 +1,19 @@
+# Zaman serisi / rolling-origin taslağı (demand sensing deseni).
+preset: timeseries_rolling
+task_hint: forecasting
+time_col: null
+group_col: null
+horizon: 4
+budget: { mode: trials, value: 30, per_fold_seconds: 120 }
+split_policy:
+  kind: rolling_origin
+  horizon_weeks: 4
+  step_weeks: 4
+  n_folds: 4
+  min_train_weeks: 52
+scenarios: [scenario_1, scenario_2]
+selection:
+  primary_metric: smape
+  metric_by_class: { Smooth: wmape, Intermittent: csl, Erratic: rmse, Lumpy: csl }
+guardrails: { enabled: true }
+tracking: { backend: jsonl }
