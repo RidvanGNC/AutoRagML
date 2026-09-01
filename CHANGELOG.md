@@ -8,6 +8,10 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 
 ## [Unreleased]
 
+### Düzeltildi
+- CI: `actions/checkout@v4→v5`, `actions/setup-python@v5→v6` (Node 20 deprecation uyarısı; yeni sürümler Node 24 native).
+- `test_timeseries_and_leakage.py`: `DatetimeIndex + pd.Timedelta` aritmetiği ayrı `date_range` ile değiştirildi (NumPy 2.5 "generic timedelta unit" DeprecationWarning).
+
 ### Eklendi
 - **`engines/` katmanı kodlandı** (ADR 0015): `select_engine(task, config)` + `InProcessRunner`.
   - `core.run_core_pipeline` — ortak akış: `build_plan` → `resolve_candidates` → `run_validation_suite(tuner=resolve_tuner)` → `score_reports` → `refit_champion` (tüm train; ES modelde n_estimators = validation best_iteration medyanı) → `ModelBundle`

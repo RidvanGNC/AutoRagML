@@ -99,12 +99,11 @@ def test_leakage_near_perfect_and_name() -> None:
 
 def test_leakage_future_dated() -> None:
     n = 50
-    ref = pd.date_range("2026-01-01", periods=n, freq="D")
     df = pd.DataFrame(
         {
             "y": np.arange(n, dtype=float),
-            "ds": ref,
-            "delivered_at": ref + pd.Timedelta(days=3),
+            "ds": pd.date_range("2026-01-01", periods=n, freq="D"),
+            "delivered_at": pd.date_range("2026-01-04", periods=n, freq="D"),
         }
     )
     profiles = build_column_profiles(df, target="y", thr=THR, sampled=False)
