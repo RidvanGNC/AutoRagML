@@ -39,6 +39,8 @@ Serialize edilebilir (pydantic v2). **Sır taşımaz** — yalnız `*_env` adlar
 | `primary_metric` | `str \| None` | `None` | `None` → task'e göre varsayılan |
 | `metric_by_class` | `dict \| None` | `None` | intermittent routing (Smooth→wmape, ...) |
 | `scenarios` | `list[str]` | `["scenario_1"]` | TS engine; `scenario_2` opt-in |
+| `hpo_level` | `HpoLevel` | `"light"` | `none` \| `light` \| `thorough` (ADR 0013) |
+| `hpo_backend` | `HpoBackend` | `"random_search"` | `optuna` opsiyonel (`[hpo]`) |
 | `guardrails` | obj | `{enabled: true}` | eşikler `scoring` varsayılanından |
 | `engines` | obj \| None | `None` | aktif engine + override; `None` → analyzers seçer |
 | `analyzers` | `AnalyzerConfig` | varsayılan | ADR 0010 eşikleri: `thresholds` + `timeseries` + `profiling_sample_rows` |
