@@ -1,0 +1,63 @@
+# Zaman serisi — classical modeller (statsforecast). ADR 0012.
+# `timeseries` engine tarafından per-series koşulur (reduction değil).
+# `requires: [statsforecast]` — kurulu değilse entry atlanır.
+
+auto_arima:
+  name: AutoARIMA
+  family: statistical
+  class_path:
+    regression: statsforecast.models.AutoARIMA
+  modalities: [timeseries]
+  tasks: [forecasting]
+  requires: [statsforecast]
+  default_params: {}
+
+auto_ets:
+  name: AutoETS
+  family: statistical
+  class_path:
+    regression: statsforecast.models.AutoETS
+  modalities: [timeseries]
+  tasks: [forecasting]
+  requires: [statsforecast]
+  default_params: {}
+
+auto_theta:
+  name: AutoTheta
+  family: statistical
+  class_path:
+    regression: statsforecast.models.AutoTheta
+  modalities: [timeseries]
+  tasks: [forecasting]
+  requires: [statsforecast]
+  default_params: {}
+
+mstl:
+  name: MSTL
+  family: statistical
+  class_path:
+    regression: statsforecast.models.MSTL
+  modalities: [timeseries]
+  tasks: [forecasting]
+  requires: [statsforecast]
+  default_params: {}
+
+croston:
+  name: CrostonOptimized
+  family: intermittent
+  class_path:
+    regression: statsforecast.models.CrostonOptimized
+  modalities: [timeseries]
+  tasks: [forecasting]
+  requires: [statsforecast]
+  default_params: {}
+
+tsb:
+  name: TSB
+  family: intermittent
+  class_path:
+    regression: statsforecast.models.TSB
+  modalities: [timeseries]
+  tasks: [forecasting]
+  requires: [statsforecast]
+  default_params: {alpha_d: 0.2, alpha_p: 0.2}

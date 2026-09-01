@@ -1,9 +1,9 @@
-# Model kataloğu (ADR 0012)
+# configs/model_catalog/
 
-Paketle gelen yerleşik katalog. Her `*.yaml` bir grup model tanımı içerir.
-Kullanıcı kendi YAML'ını `RunConfig.model_catalog_override` ile üstüne merge eder:
-- `enabled: false` ile devre dışı bırak
-- `default_params` / `search_space` değiştir
-- yeni entry ekle (importable `class_path` yeter)
+**Kullanıcı model kataloğu override'ları için.** Bu dizin pakete girmez.
 
-Entry şeması için ADR 0012'ye bakın. Bu dosyalar contract'lar dondurulduktan sonra doldurulacak.
+- Yerleşik katalog pakete gömülü: `src/autoragml/models/catalog/*.yaml`.
+- Kendi YAML'ınızı buraya koyup `RunConfig.model_catalog_override: [configs/model_catalog/benim.yaml]`
+  ile devreye alın. Entry key bazında deep-merge edilir: `enabled: false` ile kapatın,
+  `default_params`/`search_space` değiştirin, yeni entry ekleyin (importable `class_path` yeter).
+- Şema: ADR 0012 / `src/autoragml/models/catalog/tabular.yaml`.

@@ -1,0 +1,181 @@
+# Tablo + zaman serisi (reduction) model kataloğu — ADR 0012.
+# forecasting: reduction (lag/rolling feature → regressor) yoluyla `regression` class_path'i kullanılır.
+
+linear:
+  name: LinearRegression
+  family: linear
+  class_path:
+    regression: sklearn.linear_model.LinearRegression
+  modalities: [tabular, timeseries]
+  tasks: [regression, forecasting]
+  wrap: true
+
+ridge:
+  name: Ridge
+  family: linear
+  class_path:
+    regression: sklearn.linear_model.Ridge
+    classification: sklearn.linear_model.RidgeClassifier
+  modalities: [tabular, timeseries]
+  tasks: [regression, forecasting, binary_classification, multiclass_classification]
+  default_params: {alpha: 1.0, random_state: 42}
+  search_space:
+    alpha: {type: loguniform, low: 0.001, high: 100.0}
+  wrap: true
+
+lasso:
+  name: Lasso
+  family: linear
+  class_path:
+    regression: sklearn.linear_model.Lasso
+  modalities: [tabular, timeseries]
+  tasks: [regression, forecasting]
+  default_params: {alpha: 0.1, random_state: 42, max_iter: 20000}
+  search_space:
+    alpha: {type: loguniform, low: 0.0001, high: 10.0}
+  wrap: true
+
+elastic_net:
+  name: ElasticNet
+  family: linear
+  class_path:
+    regression: sklearn.linear_model.ElasticNet
+  modalities: [tabular, timeseries]
+  tasks: [regression, forecasting]
+  default_params: {alpha: 0.1, l1_ratio: 0.5, random_state: 42, max_iter: 20000}
+  search_space:
+    alpha: {type: loguniform, low: 0.0001, high: 10.0}
+    l1_ratio: {type: float, low: 0.05, high: 0.95}
+  wrap: true
+
+logistic:
+  name: LogisticRegression
+  family: linear
+  class_path:
+    classification: sklearn.linear_model.LogisticRegression
+  modalities: [tabular]
+  tasks: [binary_classification, multiclass_classification]
+  predict_kind: [point, proba]
+  default_params: {max_iter: 1000, random_state: 42}
+  search_space:
+    C: {type: loguniform, low: 0.001, high: 100.0}
+  wrap: true
+
+random_forest:
+  name: RandomForest
+  family: forest
+  class_path:
+    regression: sklearn.ensemble.RandomForestRegressor
+    classification: sklearn.ensemble.RandomForestClassifier
+  modalities: [tabular, timeseries]
+  tasks: [regression, forecasting, binary_classification, multiclass_classification]
+  predict_kind: [point, proba]
+  default_params: {n_estimators: 300, n_jobs: -1, random_state: 42}
+  search_space:
+    n_estimators: {type: int, low: 100, high: 800}
+    max_depth: {type: int, low: 3, high: 24}
+    min_samples_leaf: {type: int, low: 1, high: 20}
+  fidelity: n_estimators
+
+extra_trees:
+  name: ExtraTrees
+  family: forest
+  class_path:
+    regression: sklearn.ensemble.ExtraTreesRegressor
+    classification: sklearn.ensemble.ExtraTreesClassifier
+  modalities: [tabular, timeseries]
+  tasks: [regression, forecasting, binary_classification, multiclass_classification]
+  predict_kind: [point, proba]
+  default_params: {n_estimators: 300, n_jobs: -1, random_state: 42}
+  search_space:
+    n_estimators: {type: int, low: 100, high: 800}
+    max_depth: {type: int, low: 3, high: 24}
+  fidelity: n_estimators
+
+hist_gbm:
+  name: HistGradientBoosting
+  family: gbdt
+  class_path:
+    regression: sklearn.ensemble.HistGradientBoostingRegressor
+    classification: sklearn.ensemble.HistGradientBoostingClassifier
+  modalities: [tabular, timeseries]
+  tasks: [regression, forecasting, binary_classification, multiclass_classification, quantile_regression]
+  predict_kind: [point, proba, quantile]
+  supports_early_stopping: true
+  early_stopping_rounds: 20
+  default_params: {max_iter: 500, learning_rate: 0.05, random_state: 42, early_stopping: false}
+  search_space:
+    learning_rate: {type: loguniform, low: 0.01, high: 0.3}
+    max_leaf_nodes: {type: int, low: 15, high: 255}
+    max_depth: {type: int, low: 3, high: 16}
+    l2_regularization: {type: loguniform, low: 0.0001, high: 10.0}
+  fidelity: max_iter
+
+lightgbm:
+  name: LightGBM
+  family: gbdt
+  class_path:
+    regression: lightgbm.LGBMRegressor
+    classification: lightgbm.LGBMClassifier
+  modalities: [tabular, timeseries]
+  tasks: [regression, forecasting, binary_classification, multiclass_classification, quantile_regression]
+  predict_kind: [point, proba, quantile]
+  requires: [lightgbm]
+  supports_early_stopping: true
+  early_stopping_rounds: 50
+  default_params: {n_estimators: 1000, learning_rate: 0.05, n_jobs: -1, random_state: 42, verbose: -1}
+  search_space:
+    learning_rate: {type: loguniform, low: 0.01, high: 0.3}
+    num_leaves: {type: int, low: 15, high: 255}
+    min_child_samples: {type: int, low: 5, high: 100}
+    subsample: {type: float, low: 0.5, high: 1.0}
+    colsample_bytree: {type: float, low: 0.5, high: 1.0}
+  fidelity: n_estimators
+
+xgboost:
+  name: XGBoost
+  family: gbdt
+  class_path:
+    regression: xgboost.XGBRegressor
+    classification: xgboost.XGBClassifier
+  modalities: [tabular, timeseries]
+  tasks: [regression, forecasting, binary_classification, multiclass_classification]
+  predict_kind: [point, proba]
+  requires: [xgboost]
+  supports_early_stopping: true
+  early_stopping_rounds: 50
+  default_params: {n_estimators: 1000, learning_rate: 0.05, n_jobs: -1, random_state: 42}
+  search_space:
+    learning_rate: {type: loguniform, low: 0.01, high: 0.3}
+    max_depth: {type: int, low: 3, high: 12}
+    subsample: {type: float, low: 0.5, high: 1.0}
+    colsample_bytree: {type: float, low: 0.5, high: 1.0}
+  fidelity: n_estimators
+
+catboost:
+  name: CatBoost
+  family: gbdt
+  class_path:
+    regression: catboost.CatBoostRegressor
+    classification: catboost.CatBoostClassifier
+  modalities: [tabular, timeseries]
+  tasks: [regression, forecasting, binary_classification, multiclass_classification]
+  predict_kind: [point, proba]
+  requires: [catboost]
+  enabled: false
+  supports_early_stopping: true
+  early_stopping_rounds: 50
+  default_params: {iterations: 1000, learning_rate: 0.05, random_seed: 42, verbose: false}
+  fidelity: iterations
+
+mlp:
+  name: MLPRegressor
+  family: neural
+  class_path:
+    regression: sklearn.neural_network.MLPRegressor
+    classification: sklearn.neural_network.MLPClassifier
+  modalities: [tabular]
+  tasks: [regression, binary_classification, multiclass_classification]
+  enabled: false
+  default_params: {hidden_layer_sizes: [128, 64], early_stopping: true, max_iter: 500, random_state: 42}
+  wrap: true

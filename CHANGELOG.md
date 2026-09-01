@@ -9,6 +9,16 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 ## [Unreleased]
 
 ### Eklendi
+- **`models/` + registry kodlandı** (ADR 0012): `resolve_candidates(config, task) -> [Candidate]`.
+  - `models/catalog/*.yaml` pakete gömülü (tabular/baselines/timeseries); wheel'e dahil
+  - `registry.py` — YAML deep-merge + `requires` (`find_spec`) + `class_path` importable kontrolü → eksikse atla + tek WARNING; `enabled:false`; modalite + task filtresi; entry-points `autoragml.models` ikincil
+  - `estimator.py` — `resolve_class_path` (forecasting → reduction `regression` path'i) + `build_estimator` (param merge; `wrap` → imputer+model Pipeline)
+  - katalog: sklearn linear/ridge/lasso/elastic_net/logistic/RF/ET/hist_gbm/mlp + lightgbm (çekirdek) + xgboost/catboost (ops.) + Dummy baseline + statsforecast (ops.)
+- `RunConfig.model_catalog_override` (zaten vardı) artık `registry` tarafından tüketiliyor.
+- `tests/unit/models/` — 19 test.
+
+### Değişti
+- Repo-kök `configs/model_catalog/` stub YAML'ları kaldırıldı (katalog pakete taşındı); dizin = kullanıcı override örneği.
 - **`preprocessors/` katmanı kodlandı** (ADR 0011): `FeaturePipeline.from_plan(plan, candidate_choices)` → leakage-safe dönüşüm zinciri.
   - `base.py` — `SklearnColumnTransform` (kolon alt kümesine sklearn transformer; `cross_fitted` → `fit_transform` cross-fitting / `apply` full-train)
   - `catalog.py` — op → transform: impute · onehot/ordinal/**target_encode**(sklearn iç cross-fitting)/hashing · scale · yeo_johnson · quantile

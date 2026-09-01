@@ -72,16 +72,18 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
   fit + apply` — target_encode train'e cross-fit, test'e full-train
 - `autoragml/transform.py`: `Transform.fit_transform` protokole eklendi + `BaseTransform`
 
-## models/ + registry  (ADR 0012 — YAML katalog)
-- **Girdi:** `TaskSpec` + `AdaptivePlan` + `RunConfig` + `configs/model_catalog/*.yaml`
-  (+ kullanıcı override YAML)
-- **Çıktı:** `[Candidate]`
-- registry: YAML okur → `class_path` importable + `requires` kurulu mu → `TaskSpec.task`
-  uyumlu entry'leri `Candidate`'e çevirir; eksik dep → atla + tek WARNING
-- Katalog: sklearn linear/ridge/lasso/RF/ET/GBM · lightgbm · xgboost/catboost(ops.) ·
-  naive/seasonal_naive/trend_naive/stl baseline · statsforecast(ops.) ·
-  Croston/TSB/SBA (intermittent — havuz genişletme)
-- Entry-points = ikincil (üçüncü parti plugin); YAML kanonik
+## models/ + registry  (ADR 0012 — YAML katalog, KOD YAZILDI)
+- **Girdi:** `RunConfig` + `TaskSpec` · **Çıktı:** `resolve_candidates(config, task) -> [Candidate]`
+- `models/catalog/*.yaml` pakete gömülü (`tabular` / `baselines` / `timeseries`) +
+  `RunConfig.model_catalog_override` key-bazında deep-merge
+- `registry.py` — entry → `Candidate`: `requires` kurulu mu (`find_spec`) + `class_path`
+  importable mı; değilse atla + **tek WARNING**. `enabled: false` → dışarıda.
+  Modalite + `task in candidate.tasks` filtresi. Entry-points `autoragml.models` ikincil.
+- `estimator.py` — `resolve_class_path` (forecasting → reduction ile `regression` path'i) +
+  `build_estimator` (default + HPO paramları merge; `wrap` → `SimpleImputer`+model Pipeline)
+- Katalog: sklearn linear/ridge/lasso/elastic_net/logistic/RF/ET/hist_gbm/mlp ·
+  lightgbm (çekirdek) · xgboost/catboost (ops.) · Dummy baseline'lar ·
+  statsforecast AutoARIMA/ETS/Theta/MSTL/Croston/TSB (ops. `[timeseries]`) — TS engine tüketir
 
 ## fine_tuners/  (ADR 0013 — ensemble-öncelikli, multi-fidelity)
 - **Girdi:** `Candidate` + train (iç resample) + `budget`

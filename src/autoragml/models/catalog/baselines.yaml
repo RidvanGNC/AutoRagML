@@ -1,0 +1,31 @@
+# Baseline modeller — ADR 0012. Her koşumda referans zemini.
+# TS iteratif baseline'ları (naive/seasonal_naive/STL) `timeseries` engine'inde
+# ayrıca ele alınır; bunlar reduction-frame üzerinde çalışan sklearn Dummy'ler.
+
+dummy_mean:
+  name: DummyMean
+  family: baseline
+  class_path:
+    regression: sklearn.dummy.DummyRegressor
+  modalities: [tabular, timeseries]
+  tasks: [regression, forecasting]
+  default_params: {strategy: mean}
+
+dummy_median:
+  name: DummyMedian
+  family: baseline
+  class_path:
+    regression: sklearn.dummy.DummyRegressor
+  modalities: [tabular, timeseries]
+  tasks: [regression, forecasting]
+  default_params: {strategy: median}
+
+dummy_prior:
+  name: DummyPrior
+  family: baseline
+  class_path:
+    classification: sklearn.dummy.DummyClassifier
+  modalities: [tabular]
+  tasks: [binary_classification, multiclass_classification]
+  predict_kind: [point, proba]
+  default_params: {strategy: prior}
