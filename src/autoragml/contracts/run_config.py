@@ -11,6 +11,7 @@ from pathlib import Path
 from pydantic import Field, model_validator
 
 from autoragml.contracts._base import Contract
+from autoragml.contracts.analyzer_config import AnalyzerConfig
 from autoragml.contracts.enums import (
     HpoLevel,
     Modality,
@@ -108,6 +109,7 @@ class RunConfig(Contract):
     budget: BudgetConfig = Field(default_factory=BudgetConfig)
     split_policy: SplitPolicy | None = None
     io: IOConfig = Field(default_factory=IOConfig)
+    analyzers: AnalyzerConfig = Field(default_factory=AnalyzerConfig)
     tracking: TrackingConfig = Field(default_factory=TrackingConfig)
     llm: LLMConfig | None = None
     guardrails: GuardrailConfig = Field(default_factory=GuardrailConfig)

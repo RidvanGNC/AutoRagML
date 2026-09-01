@@ -9,6 +9,18 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 ## [Unreleased]
 
 ### Eklendi
+- **`analyzers/` katmanı kodlandı** (ADR 0010): `analyze(dataset, config) -> (DataProfile, TaskSpec)`.
+  - `modality.py` — hint/time_col/layout/datetime-dup ile tablo↔zaman serisi
+  - `profiling.py` — `ColumnProfile` (raw_dtype + special_types + semantic_role + flags + duplicate_of), numpy skew/kurtosis, `TargetSummary`
+  - `task_inference.py` — 7 task; hedef kuralları; `task_hint` çelişki uyarısı
+  - `timeseries.py` — `pandas.infer_freq` (+ anchored-weekly fallback) + freq→periyot sözlüğü + numpy-ACF mevsimsellik + OLS-R² trend; per-series ADI/CV² + SBC sınıf (`intermittent.py`); seasonality/trend toplulaştırılmış seri üzerinde
+  - `quality.py` / `leakage.py` — dataset kalite bayrakları; yumuşak sızıntı şüphesi (WARNING) + `ColumnProfile.flags`'e `leakage_suspect`
+  - `_frame.py` — lazy kaynak → örneklem + düşük güven
+- `RunConfig.analyzers` (`AnalyzerConfig`: `ThresholdConfig` + `TimeSeriesAnalyzerConfig` + `profiling_sample_rows`); `TimeSeriesProfile.intermittency_summary` eklendi.
+- `logging.py`; `tests/unit/analyzers/` — 23 test.
+
+### Not
+- `statsmodels` yok: `stationarity_pvalue=None`; `classification_scheme=kh` → SBC + uyarı (takip).
 - **`io/` katmanı kodlandı** (ADR 0009): `load_dataset(src, config) -> Dataset`.
   - `sources.py` — DataFrame/csv/tsv/parquet/dizin/`DbSource` çözümleme + boyut yoklama
   - `fingerprint.py` — **strict** sıra-bağımsız çoklu-küme hash (sum+xor+count over `hash_pandas_object`, sort'suz, streaming) + **fast** structural

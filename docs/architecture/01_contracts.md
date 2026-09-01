@@ -41,6 +41,7 @@ Serialize edilebilir (pydantic v2). **Sır taşımaz** — yalnız `*_env` adlar
 | `scenarios` | `list[str]` | `["scenario_1"]` | TS engine; `scenario_2` opt-in |
 | `guardrails` | obj | `{enabled: true}` | eşikler `scoring` varsayılanından |
 | `engines` | obj \| None | `None` | aktif engine + override; `None` → analyzers seçer |
+| `analyzers` | `AnalyzerConfig` | varsayılan | ADR 0010 eşikleri: `thresholds` + `timeseries` + `profiling_sample_rows` |
 | `tracking.backend` | enum | `"jsonl"` | none \| jsonl \| mlflow |
 | `tracking.uri_env` | `str \| None` | `None` | mlflow için env-var **adı** |
 | `llm` | obj \| None | `None` | v2. `{provider, model, endpoint_env, api_key_env}` — sır yok |

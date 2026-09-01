@@ -29,15 +29,17 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
 - `db.py` — `DbSource` + `read_sql` (sqlalchemy lazy import)
 - v1: `modparts={"tabular": ...}`, `relations=None`
 
-## analyzers/  (deterministik "perception" — ADR 0010)
-- **Girdi:** `Dataset` + `RunConfig`
-- **Çıktı:** `DataProfile` + `TaskSpec`
-- İç sıra: `modality.detect` → `profiling.build` (ColumnProfile: raw_dtype +
-  special_types + semantic_role + flags) → `task_inference.infer` →
-  `timeseries.diagnose` (infer_freq + freq→periyot sözlüğü + ACF/STL doğrulama;
-  per-series ADI/CV² + intermittency **ölçümü**) → `quality.scan` + `leakage.scan`
-- **Model eğitmez, fit etmez.** `provenance == "full"` görür.
-- Düşük güven → WARNING, akış durmaz.
+## analyzers/  (deterministik "perception" — ADR 0010, KOD YAZILDI)
+- **Girdi:** `Dataset` + `RunConfig` · **Çıktı:** `analyze() → (DataProfile, TaskSpec)`
+- `_frame.py` (eager→handle; lazy→örneklem `analyzers.profiling_sample_rows` + düşük güven)
+- İç sıra: `modality.detect` → `profiling.build_column_profiles` (raw_dtype + special_types
+  + semantic_role + flags + duplicate_of; numpy skew/kurtosis) → `task_inference.infer_task`
+  → `timeseries.diagnose_timeseries` (`pandas.infer_freq` + freq→periyot sözlüğü +
+  numpy-ACF mevsimsellik + OLS-R² trend; per-series ADI/CV² + SBC sınıf; toplulaştırılmış
+  seri üzerinde seasonality/trend) → `quality.scan` + `leakage.scan` (yumuşak, WARNING)
+- Eşikler `RunConfig.analyzers` (`ThresholdConfig` + `TimeSeriesAnalyzerConfig`)
+- **Model eğitmez, fit etmez.** Düşük güven → WARNING, akış durmaz.
+- `statsmodels` yok: `stationarity_pvalue=None` (v1); KH şeması → SBC + uyarı (takip).
 
 ## dynamics/  (veriye-özel strateji — ADR 0007)
 - `planner.py` — **Girdi:** `DataProfile` + `TaskSpec` + `RunConfig` · **Çıktı:** `AdaptivePlan`

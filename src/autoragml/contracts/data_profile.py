@@ -95,6 +95,7 @@ class TimeSeriesProfile(Contract):
     trend_strength: float | None = None
     stationarity_pvalue: float | None = None
     per_series: list[SeriesProfile] = Field(default_factory=list)
+    intermittency_summary: dict[str, int] = Field(default_factory=dict)  # sınıf → grup sayısı
     classification_scheme: ClassificationScheme = ClassificationScheme.SBC
     per_series_detail: PerSeriesDetail = PerSeriesDetail.FULL
 

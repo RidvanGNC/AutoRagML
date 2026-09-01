@@ -14,6 +14,11 @@ from autoragml.contracts.adaptive_plan import (
     ColumnOp,
     RegimeDef,
 )
+from autoragml.contracts.analyzer_config import (
+    AnalyzerConfig,
+    ThresholdConfig,
+    TimeSeriesAnalyzerConfig,
+)
 from autoragml.contracts.candidate import Candidate, SearchDim
 from autoragml.contracts.config_resolution import ConfigResolution
 from autoragml.contracts.data_profile import (
@@ -66,6 +71,7 @@ from autoragml.contracts.validation import (
 
 __all__ = [
     "AdaptivePlan",
+    "AnalyzerConfig",
     "BudgetConfig",
     "BundleMetadata",
     "Candidate",
@@ -109,6 +115,8 @@ __all__ = [
     "SplitPolicy",
     "TargetSummary",
     "TaskSpec",
+    "ThresholdConfig",
+    "TimeSeriesAnalyzerConfig",
     "TimeSeriesProfile",
     "TimelineEntry",
     "TrackingConfig",
