@@ -68,8 +68,12 @@ pipeline'ından geçemiyor (`'DataFrame' object has no attribute 'dtype'`).
 | dataset | primary | şampiyon | test | seasonal-naive | Δ | nihai holdout |
 |---|---|---|---|---|---|---|
 | m3_monthly (400 seri) | sMAPE | `auto_ets` (statistical) | 15.97 | 14.80 | −7.9% | 17.4 (ADR 0023 öncesi **63**) |
-| tourism_large (555 seri) | wMAPE | `extra_trees` (forest) | **18.48** | 19.64 | **+5.9% ✅** | 18.27 |
+| tourism_large (555 seri) | wMAPE | `extra_trees` (forest) | **17.61** | 19.64 | **+10.3% ✅** | 18.12 |
 | m5_subset (400 seri, kesikli) | wMAPE | `tsb` (intermittent) | 105.2 | 99.6 | −5.6% 🔴 | 75.9 |
+
+**ADR 0025 (zengin reduction, ~13→42 özellik) etkisi:** tourism +5.9% → **+10.3%** (reduction'ın
+zaten şampiyon olduğu panel); m3 değişmedi (klasik model M3 monthly'de reduction'ı geçiyor).
+m5: recursive multi-step + per-grup olmadan rich features tek başına yetmiyor (ADR 0026).
 
 - **m3:** ADR 0023 forecasting'i çalışır yaptı (reduction-only sMAPE 47 → auto_ets 16, holdout **63→17**).
   Seasonal-naive M3 monthly'de competition-grade → auto_ets %8 içinde, iyi sonuç. `classical_ensemble`
