@@ -39,6 +39,7 @@ class BenchmarkDataset:
     group_col: str | None = None
     horizon: int = 1
     season_length: int = 1
+    primary_metric: str | None = None  # düşük-hacimli/intermittent panelde wmape (sMAPE patlar)
 
     @property
     def is_timeseries(self) -> bool:
@@ -174,20 +175,20 @@ DATASETS: list[BenchmarkDataset] = [
     # --- 2. dalga: forecasting (panel) ---
     BenchmarkDataset(
         name="m3_monthly", loader=_m3_monthly, task_hint="forecasting", naive="seasonal_naive",
-        notes="M3 Monthly — 1428 seri, aylık, klasik (düz talep).", tags=["forecasting", "panel", "monthly"],
-        time_col="ds", group_col="unique_id", horizon=18, season_length=12,
+        notes="M3 Monthly — aylık, düz talep (yüksek hacim).", tags=["forecasting", "panel", "monthly"],
+        time_col="ds", group_col="unique_id", horizon=18, season_length=12, primary_metric="smape",
     ),
     BenchmarkDataset(
         name="tourism_large", loader=_tourism_large, task_hint="forecasting", naive="seasonal_naive",
-        notes="Avustralya turizm hiyerarşisi — aylık, pürüzsüz panel (~555 seri).",
+        notes="Avustralya turizm hiyerarşisi — aylık, düşük-hacimli seriler karışık (~555 seri).",
         tags=["forecasting", "panel", "monthly", "hierarchical"],
-        time_col="ds", group_col="unique_id", horizon=12, season_length=12,
+        time_col="ds", group_col="unique_id", horizon=12, season_length=12, primary_metric="wmape",
     ),
     BenchmarkDataset(
         name="m5_subset", loader=_m5_subset, task_hint="forecasting", naive="seasonal_naive",
         notes=f"M5 (Walmart) — {_M5_MAX_SERIES} seri alt-küme, günlük, kesikli talep.",
         tags=["forecasting", "panel", "daily", "intermittent"],
-        time_col="ds", group_col="unique_id", horizon=28, season_length=7,
+        time_col="ds", group_col="unique_id", horizon=28, season_length=7, primary_metric="wmape",
     ),
 ]
 

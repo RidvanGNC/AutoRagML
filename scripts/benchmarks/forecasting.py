@@ -70,13 +70,12 @@ def run_forecasting(ds: BenchmarkDataset, hpo: str, out_dir: str) -> Outcome:
         f"h={ds.horizon} · s={ds.season_length}"
     )
 
+    overrides: dict[str, object] = {"split_policy": {"horizon": ds.horizon}}
+    if ds.primary_metric:
+        overrides["primary_metric"] = ds.primary_metric
     model = AutoRagML(hpo_level=hpo, output_dir=out_dir, project_name=ds.name)
     result = model.fit(
-        train_df,
-        target=target,
-        time_col=ds.time_col,
-        group_col=ds.group_col,
-        split_policy={"horizon": ds.horizon},
+        train_df, target=target, time_col=ds.time_col, group_col=ds.group_col, **overrides
     )
 
     preds = np.asarray(result.predict(eval_df), dtype=np.float64)
