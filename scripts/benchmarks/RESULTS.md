@@ -63,13 +63,22 @@ Her seri **son `horizon` dönem** harici holdout; **seasonal-naive** baseline; s
 Kök neden: klasik modeller (auto_arima/ets/theta/croston) kataloğda ama reduction
 pipeline'ından geçemiyor (`'DataFrame' object has no attribute 'dtype'`).
 
-### 2b — native classical (ADR 0023) — `m3_monthly` (400 seri alt-küme, `--hpo none`)
-- **Şampiyon: `auto_ets`** (statistical) — klasik yol devrede; 1-SE kuralı 8 aday içinden en basiti seçti.
-- OOF sMAPE **12.73** · **nihai holdout sMAPE 17.4** (63 → 17, ~3.6× iyileşme).
-- M3 monthly'de seasonal-naive notoriously güçlü (competition-grade metodlar ~13-15 sMAPE) —
-  auto_ets civarında; reduction lightgbm artık şampiyon değil.
+### 2b — native classical (ADR 0023), `--hpo none`
+
+| dataset | primary | şampiyon | test | seasonal-naive | Δ | nihai holdout |
+|---|---|---|---|---|---|---|
+| m3_monthly (400 seri) | sMAPE | **auto_ets** (statistical) | 15.97 | 14.80 | −7.9% | 17.4 (ADR 0023 öncesi **63**) |
+| tourism_large (555 seri) | wMAPE | **extra_trees** (forest) | **18.48** | 19.64 | **+5.9% ✅** | 18.27 |
+| m5_subset | wMAPE | _(koşuyor)_ | | | | |
+
+- **m3:** M3 monthly'de seasonal-naive competition-grade (metodların çoğu ~13-15 sMAPE) — auto_ets
+  %8 içinde, reduction-only'nin sMAPE 47/holdout 63'ünden **3.6× iyi**. Klasik yol devrede.
+- **tourism:** **wMAPE ile SUCCESS.** İlk koşum sMAPE'de "başarısız"dı çünkü tourism serilerinde
+  y≈0 → sMAPE patlıyor, croston yanlış şampiyon oluyordu. `primary_metric=wmape` (demand-planning
+  standardı) → doğru seçim, seasonal-naive'i geçiyor.
+- **Bug (küçük, bloklamıyor):** promotion kapısı `smape_max=35` sabit → wMAPE-optimize koşumda
+  `promotion=FAIL` diyor ama seçim/başarı doğru. Metrik-duyarlı promotion → v1.1.
 - `weighted_ensemble` klasiği dışlıyor (cutoff-tabanlı OOF ≠ fold-tabanlı, ADR 0023 v1).
-- `tourism_large` / `m5_subset`: koşum ayrı (büyük panel, klasik CV maliyeti).
 
 ## Sonraki dalgalar
 - **3. dalga:** yüksek boyut/seyrek, ordinal, quantile; `--hpo light/thorough` karşılaştırması.
