@@ -1,6 +1,11 @@
 # ADR 0031 — nöral mimari arama (`architecture_search` tuner modu)
 
-**Durum:** Taslak · 2026-09-03
+**Durum:** Kabul · 2026-09-03 (kullanıcı 3 kararı kilitledi)
+
+**Kilitli kararlar:** (1) kapsam = **aile taraması → kazanan ailede derin mimari arama** (iki
+aşama); (2) etkinleşme = **yalnız açık `neural_search=True`** (hpo_level/preset bağlaması yok);
+(3) backend = **`pytorch-tabular`** (`[neural-nas]` extra), serving = `TabularModel` dizini bundle'a
+gömülür (persistence sözleşmesi genişler).
 
 Kaynak: kullanıcı isteği — "parametre optimizasyonu gibi ama daha kapsamlı; parametreleri test
 eden, **farklı layerlar ekleyen**, bu değişikliklere göre sonuç üreten bir optimizer" (layer
@@ -30,23 +35,32 @@ döner (ADR 0021 GES + ADR 0014 1-SE). **Regresyon garantisi yok değil — var.
 
 ## Karar
 
-### 1. Etkinleştirme
+### 1. Etkinleştirme (KİLİTLİ: yalnız açık bayrak)
 
-`RunConfig.neural_search: bool = False` (+ `neural_search_space: Literal["small", "full"] = "small"`).
-- Yalnız `family: neural` adaylarına uygulanır; GBDT/linear normal HPO'da kalır.
-- Yalnız `neural_search=True` VEYA `hpo_level=thorough` + GPU. Hiçbir varsayılan preset açmaz.
-- `neural_enabled` kapısı (ADR 0030) önce geçilmeli (GPU / satır bandı).
+`RunConfig.neural_search: bool = False` + `neural_search_space: Literal["small", "full"] = "small"`
++ `neural_search_budget_seconds: int | None = None`.
+- **Yalnız `neural_search=True`** ile çalışır. `hpo_level`/preset **tetiklemez** (sürpriz uzun
+  koşum yok). `neural_enabled` kapısı (ADR 0030) önce geçilmeli (GPU / satır bandı).
+- Yalnız `family: neural` adaylarını etkiler; GBDT/linear normal HPO'da kalır.
 
-### 2. Arama uzayı (`configs/search_spaces/neural_arch_{small,full}.yaml` — override edilebilir)
+### 2. İki aşama (KİLİTLİ: sweep → derin arama)
 
-**small** (hızlı, ~30-60 konfigürasyon):
+**Aşama A — aile taraması** (`pytorch_tabular` model aileleri, meta-tune default'lar, kısa bütçe):
+`MLP` (Category Embedding) · `ResNet` · `GANDALF` · `FT-Transformer` · `TabNet` · `NODE`
+(katalogda `neural_nas.yaml`, kullanıcı kısaltabilir). Her aile 1× düşük-epoch fit → iç-val
+metriği → **en iyi 1-2 aile** seçilir.
+
+**Aşama B — derin mimari + HP arama** (kazanan aile[ler] üzerinde, multi-fidelity):
+koşullu arama uzayı `configs/search_spaces/neural_arch_{small,full}.yaml` (override edilebilir):
+
+**small** (~30-60 konfig):
 ```
 n_layers        int         [1, 4]
 layer_width     categorical [64, 128, 256, 512]
 dropout         float       [0.0, 0.4]
 learning_rate   loguniform  [1e-4, 1e-2]
 ```
-**full** (SOTA hedefi, ~100-200 konfigürasyon):
+**full** (~100-200 konfig):
 ```
 + activation     categorical [relu, gelu, mish, leaky_relu]
 + residual       bool                      # skip-connection (MLP → ResNet)
@@ -54,8 +68,10 @@ learning_rate   loguniform  [1e-4, 1e-2]
 + weight_decay   loguniform  [1e-6, 1e-2]
 + batch_size     categorical [256, 512, 1024]
 + embedding_dim  int         [8, 64]       # kategorik gömme
-+ layer_width_scaling categorical [const, pyramid, funnel]  # per-layer genişlik profili
++ layer_width_scaling categorical [const, pyramid, funnel]
++ (FT-T kazandıysa) n_heads / attn_dropout / ff_multiplier
 ```
+Aile-özel HP'ler `condition` ile aktive olur (ör. `n_heads` yalnız `family == ft_transformer`).
 
 ### 3. `SearchDim` sözleşmesi genişler (additive)
 
@@ -73,13 +89,25 @@ korunur (ASHA benzeri erken durdurma pytorch-lightning callback'iyle).
 ### 5. `ArchitectureSearchTuner` (`fine_tuners/arch_search.py`)
 
 `Tuner` protokolüne uyar (candidate + dış-fold train frame + plan + config → `TunerOutcome`).
-- **Nested CV korunur (ADR 0010/6):** arama yalnız dış-fold train'in iç resample'ında.
-- Her deneme: config → `pytorch_tabular` `MLPConfig`/`GANDALFConfig`/... → `TabularModel.fit` →
-  iç-val metriği. SH turları arası `budget.total_max_seconds` zorlanır (kill).
-- Çıktı: en iyi mimari config `TunerOutcome.best_params` içinde; `candidate.key` `neural_arch_search`
-  olarak scoreboard'a girer (`family: neural`, `_FAMILY_COMPLEXITY` = 5 — arama = karmaşık).
-- Serving: `FittedModelPipeline` içinde `pytorch_tabular` `TabularModel` (kendi predict'i;
-  `Predictor` protokolü sarımı — joblib yerine `TabularModel.save_model` + bundle referansı).
+- **Nested CV korunur (ADR 0010/6):** aile taraması + derin arama yalnız dış-fold train'in iç
+  resample'ında. Dış fold yalnız skorlar.
+- Aşama A: her aile 1× (düşük epoch) → iç-val → en iyi ≤2 aile.
+- Aşama B: kazanan aile(ler) üzerinde SH/Hyperband — config → `pytorch_tabular`
+  `MLPConfig`/`GANDALFConfig`/`FTTransformerConfig`/... → `TabularModel.fit` → iç-val metriği.
+  SH turları arası `neural_search_budget_seconds` (yoksa varsayılan 3600s) zorlanır (kill).
+- Çıktı: en iyi mimari+HP config `TunerOutcome.best_params` içinde; `candidate.key`
+  `neural_arch_search` olarak scoreboard'a girer (`family: neural`, `_FAMILY_COMPLEXITY` = 5).
+- **Serving:** `pytorch_tabular` `TabularModel` — `Predictor` protokolü sarımı
+  (`FittedNeuralArchPipeline`). joblib picklable DEĞİL → `persistence` genişler (aşağıda).
+
+### 5b. Persistence genişlemesi (KİLİTLİ)
+
+`save_bundle` (ADR 0018): şampiyon `neural_arch_search` ise `champion.joblib` yanında
+`champion_neural/` dizini — `TabularModel.save_model(dir)` (torch state + config + datamodule).
+`load_bundle`: dizin varsa `TabularModel.load_model` + `FittedNeuralArchPipeline` sarımı.
+`ModelBundle.metadata.params` mimari config'i (n_layers, family, ...) taşır — manifest'te görünür.
+Sözleşme: `BundleMetadata` değişmez; `persistence.bundle` `_NEURAL_DIR = "champion_neural"` sabiti +
+save/load dallanması (additive).
 
 ### 6. Determinizm + kaynak
 
@@ -91,14 +119,20 @@ korunur (ASHA benzeri erken durdurma pytorch-lightning callback'iyle).
 
 ## Sözleşme (donacak)
 
-- `RunConfig.neural_search: bool` + `neural_search_space: Literal["small", "full"]` (additive).
-- `SearchDim.condition: dict | None` (additive — mevcut düz uzaylar etkilenmez).
-- `configs/search_spaces/neural_arch_small.yaml` + `neural_arch_full.yaml` (pakete gömülü).
-- `fine_tuners/arch_search.py::ArchitectureSearchTuner`; `resolve_tuner` `neural_search` iken
-  nöral adaylara bunu, diğerlerine normal tuner'ı verir (heterojen tuner).
-- `pyproject` `[project.optional-dependencies]` `neural-nas = ["pytorch-tabular>=1.1"]`.
-- `Candidate` key `neural_arch_search` (sentetik — arama sonucu).
-- Serving: bundle'da `pytorch_tabular` model dizini (`persistence` `save_bundle` genişler).
+- `RunConfig`: `neural_search: bool = False`, `neural_search_space: Literal["small","full"] = "small"`,
+  `neural_search_budget_seconds: int | None = None` (additive).
+- `SearchDim.condition: dict[str,object] | None = None` (additive — mevcut düz uzaylar etkilenmez;
+  `{"param": ..., "eq"|"ne"|"ge"|"in": ...}`).
+- `configs/search_spaces/neural_arch_small.yaml` + `neural_arch_full.yaml` + `neural_families.yaml`
+  (aile listesi) — pakete gömülü, override edilebilir.
+- `fine_tuners/arch_search.py::ArchitectureSearchTuner`; `resolve_tuner`: `neural_search` iken
+  `family: neural` adaylara bunu, diğerlerine normal tuner'ı (heterojen tuner seçimi —
+  `validators.run_validation_suite` aday-başı tuner destekler).
+- `pyproject` `neural-nas = ["pytorch-tabular>=1.1"]` (torch/pytabkit üzerine).
+- `Candidate` key `neural_arch_search` (sentetik). `_FAMILY_COMPLEXITY["neural"]` = 5 korunur.
+- `persistence.bundle`: `_NEURAL_DIR` + `TabularModel.save_model`/`load_model` dallanması;
+  `FittedNeuralArchPipeline` (`Predictor`, joblib-picklable **değil** — dizinden yüklenir).
+- `Candidate`/`EngineResult`/`ModelBundle`/`BundleMetadata` sözleşmeleri **değişmez**.
 
 ## Kapsam dışı / sonra
 
@@ -109,11 +143,19 @@ korunur (ASHA benzeri erken durdurma pytorch-lightning callback'iyle).
 - **Transformer mimari araması** (FT-T katman/head sayısı) → önce FT-Transformer mini-ADR.
 - **RL-NAS / evrimsel NAS** → kapsam dışı (compute:fayda oranı kötü).
 - **Nöral forecasting mimari araması** → ADR 0032 (neuralforecast) sonrası ayrı değerlendirme.
+- **Auto-PyTorch backend / BOHB / cross-table portföyler** → v1.2 (ağır, kendi CV'si bizimkiyle çakışır).
 
-## Açık sorular (kilitleme öncesi — kullanıcıya)
+## Sonuç (implementasyon planı — ADR kabul sonrası)
 
-1. `neural_search` etkinleşme: yalnız açık bayrak mı, yoksa `hpo_level=thorough` da tetiklesin mi?
-2. Backend: `pytorch-tabular` (aktif, kolay entegre) vs `Auto-PyTorch` doğrudan (daha güçlü ama
-   ağır bağımlılık + kendi CV'si bizimkiyle çakışır) — `pytorch-tabular` öneriyorum.
-3. Serving formatı: `pytorch_tabular` model dizini bundle'a gömülür (joblib değil) — `persistence`
-   sözleşmesi genişler. Kabul?
+1. `pyproject` `neural-nas` extra + mypy override.
+2. `SearchDim.condition` + `fine_tuners/space.py` koşul değerlendirme (+ mevcut test'ler bozulmaz).
+3. `configs/search_spaces/neural_arch_{small,full}.yaml` + `neural_families.yaml`.
+4. `fine_tuners/arch_search.py` — `ArchitectureSearchTuner` (Aşama A sweep + Aşama B SH).
+5. `fine_tuners/resolve_tuner` heterojen: `neural_search` iken nöral adaylara `ArchitectureSearchTuner`.
+6. `pytorch_tabular` wrapper (`models/neural_arch.py`?) — config→`TabularModel`, `FittedNeuralArchPipeline`.
+7. `persistence.bundle` `_NEURAL_DIR` save/load dallanması.
+8. `RunConfig` alanları + `resolve_run_config`.
+9. Testler: `condition` örnekleme, `ArchitectureSearchTuner` (mock `TabularModel`), bundle
+   save/load round-trip, `neural_search=False` → hiç etki yok.
+10. GPU e2e (RTX 4060): `neural_search=True` küçük veri → `neural_arch_search` leaderboard'da +
+    serving round-trip; benchmark bir tabular set.
