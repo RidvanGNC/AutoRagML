@@ -154,6 +154,12 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
   `refit_champion` → `ModelBundle`
 - `timeseries/reduction.py` — **leakage-safe** lag/rolling/ewm özellikleri (`shift ≥ horizon`);
   yeni kolonlar profile'a eklenir; `pre_transform` bundle'a gömülür (predict'te yeniden uygulanır)
+- `timeseries/classical.py` (ADR 0023) — klasik adaylar (`family∈{statistical,intermittent}`)
+  **Nixtla `StatsForecast` native yolu**: `cross_validation` → OOF (rolling-origin, adaptif
+  pencere + kısa seri filtresi + `SeasonalNaive` fallback) → `ValidationReport`; şampiyon klasik ise
+  `FittedClassicalForecaster` (`sf.fit`/`sf.predict`, `Predictor` protokolü). `run_core_pipeline
+  (run_classical=True)` iki aileyi birleştirir; `RunConfig.classical_forecasting` bayrağı.
+  **v1:** GES ensemble klasiği dışlar (cutoff ≠ fold OOF); reduction pooled
 - `champion.py` — **k-fold bagged refit (ADR 0022, varsayılan)**: tek model / %100 train yerine
   `bagging.folds` (5) fold-modeli, serving = ortalama (`FittedEnsemblePipeline` eşit ağırlık);
   bagged OOF postprocess'e girer. `k<2` / `bagging.enabled=False` / sınıflandırma → tek model

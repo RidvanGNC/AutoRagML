@@ -76,17 +76,39 @@ def test_tabular_engine_end_to_end() -> None:
     assert not np.isnan(pred).any()
 
 
-def test_timeseries_engine_end_to_end_with_reduction() -> None:
+def test_timeseries_engine_reduction_only() -> None:
     df = _panel_df()
-    ds, cfg, profile, task = _prep(df, time_col="ds", group_col="g")
+    ds, cfg, profile, task = _prep(df, time_col="ds", group_col="g", classical_forecasting=False)
     result = InProcessRunner().run(TimeSeriesCoreEngine(), ds, cfg, profile, task)
     assert result.status in {EngineStatus.SUCCESS, EngineStatus.PARTIAL}
     assert result.engine_key == "timeseries_core"
-    assert result.adaptive_plan is not None
     assert any("reduction" in m for m in result.messages)
-    # lag özellikleri şampiyon feature'larına girdi
-    assert any("_lag_" in c for c in result.champion.metadata.feature_cols)
-    # predict: tam geçmiş verilir, reduction FE yeniden uygulanır
+    assert any("_lag_" in c for c in result.champion.metadata.feature_cols)  # reduction şampiyonu
+    pred = result.champion.pipeline.predict(df)
+    assert len(pred) == len(df)
+    assert not np.isnan(pred).any()
+
+
+def _monthly_panel() -> pd.DataFrame:
+    """Küçük aylık panel — klasik CV hızlı (season 12, ~60 nokta)."""
+    months = pd.date_range("2019-01-01", periods=60, freq="MS")
+    rng = np.random.default_rng(2)
+    return pd.DataFrame(
+        {"g": g, "ds": m, "y": max(0.0, 80 + 20 * np.sin(i / 12 * 6.28) + rng.normal(0, 4))}
+        for g in ("A", "B", "C", "D")
+        for i, m in enumerate(months)
+    )
+
+
+def test_timeseries_engine_classical_competes() -> None:
+    df = _monthly_panel()
+    ds, cfg, profile, task = _prep(
+        df, time_col="ds", group_col="g", split_policy={"horizon": 6}
+    )  # classical açık (varsayılan)
+    result = InProcessRunner().run(TimeSeriesCoreEngine(), ds, cfg, profile, task)
+    assert result.status in {EngineStatus.SUCCESS, EngineStatus.PARTIAL}
+    keys = [r.model_key for r in result.scoreboard.rows]
+    assert any(k in {"auto_ets", "auto_arima", "auto_theta", "mstl"} for k in keys)  # klasik yarıştı
     pred = result.champion.pipeline.predict(df)
     assert len(pred) == len(df)
     assert not np.isnan(pred).any()

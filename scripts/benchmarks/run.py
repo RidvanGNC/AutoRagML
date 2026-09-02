@@ -20,6 +20,7 @@ from pandas.api.types import is_numeric_dtype
 
 from scripts.benchmarks.datasets import BY_NAME, DATASETS, BenchmarkDataset, naive_prediction
 from scripts.benchmarks.evaluate import Outcome, evaluate
+from scripts.benchmarks.forecasting import run_forecasting
 
 _RUNS_DIR = Path(__file__).parent / "_runs"
 
@@ -55,6 +56,12 @@ def run_one(ds: BenchmarkDataset, *, hpo: str, out_dir: Path) -> Outcome:
 
     print(f"\n=== {ds.name} ({ds.task_hint}) — {ds.notes}")
     t0 = time.perf_counter()
+    if ds.is_timeseries:
+        try:
+            return run_forecasting(ds, hpo, str(out_dir))
+        except Exception as exc:  # noqa: BLE001
+            traceback.print_exc()
+            return _error_outcome(ds.name, ds.task_hint, exc, time.perf_counter() - t0)
     try:
         df, target = ds.loader()
         df, encoded = _encode_target(df, target, ds.task_hint)

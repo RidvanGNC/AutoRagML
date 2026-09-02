@@ -17,6 +17,7 @@ from autoragml.contracts.run_config import RunConfig
 from autoragml.contracts.task_spec import TaskSpec
 from autoragml.dynamics import build_plan
 from autoragml.engines.champion import refit_champion
+from autoragml.engines.timeseries.classical import is_classical, run_classical_reports
 from autoragml.ensembling import build_weighted_ensemble
 from autoragml.exceptions import EngineError
 from autoragml.fine_tuners import resolve_tuner
@@ -38,8 +39,13 @@ def run_core_pipeline(
     tuner: Tuner | None = None,
     messages: list[str] | None = None,
     pre_transform: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
+    run_classical: bool = False,
 ) -> EngineResult:
-    """Standart dynamics→models→validators→scoring→refit akışı."""
+    """Standart dynamics→models→validators→scoring→refit akışı.
+
+    `run_classical=True` (TS engine): klasik adaylar (`family∈{statistical,intermittent}`)
+    `StatsForecast` native yolundan geçer, reduction adayları normal suite'ten (ADR 0023).
+    """
     msgs = list(messages or [])
     degraded = False  # yalnız gerçek sorunlar PARTIAL yapar; ensemble/reduction bilgi amaçlı
     tuner = tuner or resolve_tuner(config)
@@ -51,14 +57,21 @@ def run_core_pipeline(
         degraded = True
 
     candidates = resolve_candidates(config, task)
-    logger.info("[engine %s] %d aday doğrulanıyor", engine_key, len(candidates))
+    reduction_cands = [c for c in candidates if not (run_classical and is_classical(c))]
+    classical_cands = [c for c in candidates if run_classical and is_classical(c)]
+    logger.info(
+        "[engine %s] %d reduction + %d klasik aday", engine_key, len(reduction_cands), len(classical_cands)
+    )
 
-    reports = run_validation_suite(candidates, frame, plan, profile, task, config, tuner=tuner)
+    reports = run_validation_suite(reduction_cands, frame, plan, profile, task, config, tuner=tuner)
+    if classical_cands:
+        reports += run_classical_reports(frame, profile, task, config, classical_cands)
     if not reports:
         msg = f"{engine_key}: hiçbir aday doğrulanamadı"
         raise EngineError(msg)
-    if len(reports) < len(candidates):
-        failed = {c.key for c in candidates} - {r.candidate_key for r in reports}
+    validated = {r.candidate_key for r in reports}
+    if len(validated) < len(candidates):
+        failed = {c.key for c in candidates} - validated
         msgs.append(f"doğrulanamayan adaylar: {sorted(failed)}")
         degraded = True
 

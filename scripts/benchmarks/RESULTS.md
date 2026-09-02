@@ -54,7 +54,23 @@ String-etiketli sınıflandırma hedefi `split_xy`'de sayısala zorlanıyor → 
 hedefi `pd.Categorical(...).codes` ile kodluyor (`target_encoded=true`). Otomatik
 label-encoding → **v1.1 ADR**.
 
-## Sonraki dalgalar
+## 2. dalga — panel forecasting (Nixtla `datasetsforecast`)
 
-- **2. dalga:** TS panel (Nixtla `car_parts`, tourism) + M5 (Kaggle, elle).
+Her seri **son `horizon` dönem** harici holdout; **seasonal-naive** baseline; sMAPE.
+
+### 2a — reduction-only (ADR 0023 öncesi) — BAŞARISIZ
+`m3_monthly` şampiyon lightgbm, sMAPE **47** vs seasonal-naive **14** (nihai holdout sMAPE **63**).
+Kök neden: klasik modeller (auto_arima/ets/theta/croston) kataloğda ama reduction
+pipeline'ından geçemiyor (`'DataFrame' object has no attribute 'dtype'`).
+
+### 2b — native classical (ADR 0023) — `m3_monthly` (400 seri alt-küme, `--hpo none`)
+- **Şampiyon: `auto_ets`** (statistical) — klasik yol devrede; 1-SE kuralı 8 aday içinden en basiti seçti.
+- OOF sMAPE **12.73** · **nihai holdout sMAPE 17.4** (63 → 17, ~3.6× iyileşme).
+- M3 monthly'de seasonal-naive notoriously güçlü (competition-grade metodlar ~13-15 sMAPE) —
+  auto_ets civarında; reduction lightgbm artık şampiyon değil.
+- `weighted_ensemble` klasiği dışlıyor (cutoff-tabanlı OOF ≠ fold-tabanlı, ADR 0023 v1).
+- `tourism_large` / `m5_subset`: koşum ayrı (büyük panel, klasik CV maliyeti).
+
+## Sonraki dalgalar
 - **3. dalga:** yüksek boyut/seyrek, ordinal, quantile; `--hpo light/thorough` karşılaştırması.
+- **v1.1:** klasik+reduction ortak ensemble (ortak backtest ızgarası); recursive multi-step.

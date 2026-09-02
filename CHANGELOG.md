@@ -9,6 +9,18 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 ## [Unreleased]
 
 ### Eklendi
+- **Native classical forecasting** (ADR 0023): benchmark 2. dalga bulgusu — `m3_monthly` şampiyon
+  sMAPE 47 vs seasonal-naive 14 (klasik modeller kataloğda ama reduction pipeline'ından geçemiyordu).
+  - `engines/timeseries/classical.py` — `family∈{statistical,intermittent}` adaylar Nixtla
+    `StatsForecast` native yolundan: `cross_validation` → OOF (rolling-origin), `fit`/`predict` → serving.
+  - CV pencere sayısı seri uzunluğuna uyarlanır (ilk eğitim penceresi ≥ 2·season); kısa seriler
+    filtrelenir; `SeasonalNaive` fallback; `season_length` mevsimsel modellere oto-enjekte.
+  - `TimeSeriesCoreEngine` iki yolu birleştirir (`run_core_pipeline(run_classical=…)`); şampiyon
+    her iki aileden olabilir. `refit_champion` klasik şampiyonu `_classical_bundle`'a yönlendirir.
+  - `RunConfig.classical_forecasting: bool = True` (büyük panelde yavaş — kapatılabilir).
+  - **v1 sınırı:** GES ensemble klasik modelleri dışlar (cutoff-tabanlı OOF ≠ fold-tabanlı); v1.1.
+  - `datasetsforecast` dev bağımlılığı (benchmark 2. dalga: M3/TourismLarge/M5).
+  - `tests/unit/engines/test_classical_forecasting.py` (3).
 - **k-fold bagged şampiyon refit** (ADR 0022): benchmark bulgusu — `--hpo light` 6 datasetin 4'ünde
   `none`'dan **kötü** (tek iç fold → val'a aşırı-uyum) + bagging yoktu.
   - `refit_champion`: tek model / %100 train yerine `bagging.folds` (5) fold-modeli; serving = ortalama

@@ -1,8 +1,8 @@
-"""TimeSeriesCoreEngine — reduction (lag/rolling → tabular model) çekirdek engine (ADR 0004 + 0015).
+"""TimeSeriesCoreEngine — reduction + native classical çekirdek engine (ADR 0004 + 0015 + 0023).
 
-Akış: reduction FE (leakage-safe, shift≥horizon) → yeni kolonları profile'a ekle →
-ortak akış (dynamics→models→validators→scoring→refit). statsforecast classical modeller
-kuruluysa aday havuzundadır; per-series koşumları v1.1 (şimdilik reduction pooled).
+Akış: reduction FE (leakage-safe, shift≥horizon) → ortak akış. Reduction adayları
+tabular pipeline'dan, **klasik adaylar (statsforecast) native `StatsForecast` yolundan**
+(`run_classical=True`) geçer; şampiyon her iki aileden olabilir.
 """
 
 from __future__ import annotations
@@ -65,4 +65,5 @@ class TimeSeriesCoreEngine:
         return run_core_pipeline(
             self.key, augmented, profile, task, config,
             tuner=tuner, messages=messages, pre_transform=pre_transform,
+            run_classical=config.classical_forecasting,
         )

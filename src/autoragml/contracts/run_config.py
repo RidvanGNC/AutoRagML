@@ -156,6 +156,7 @@ class RunConfig(Contract):
     selection_rule: SelectionRule = SelectionRule.ONE_STD_ERR
     engines: dict[str, object] | None = None
     model_catalog_override: list[Path] = Field(default_factory=list)
+    classical_forecasting: bool = True  # statsforecast native yolu (ADR 0023); büyük panelde yavaş
 
     @model_validator(mode="after")
     def _post_checks(self) -> RunConfig:

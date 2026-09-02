@@ -57,6 +57,7 @@ dev = [
     "sqlalchemy>=2.0",
     "optuna>=3.5",
     "matplotlib>=3.7",
+    "datasetsforecast>=0.0.8",   # benchmark 2. dalga (M3/Tourism/M5 panel)
 ]
 
 [project.scripts]

@@ -28,6 +28,7 @@ from autoragml.contracts.task_spec import TaskSpec
 from autoragml.contracts.validation import ValidationReport
 from autoragml.engines.ensemble_pipeline import FittedEnsemblePipeline
 from autoragml.engines.model_pipeline import FittedModelPipeline, Predictor
+from autoragml.engines.timeseries.classical import is_classical, refit_classical
 from autoragml.ensembling import ENSEMBLE_KEY
 from autoragml.exceptions import EngineError
 from autoragml.logging import get_logger
@@ -281,6 +282,9 @@ def refit_champion(
             tuner, pre_transform,
         )
 
+    if is_classical(candidate):
+        return _classical_bundle(candidate, selection, reports, frame, profile, task, config)
+
     report = next((r for r in reports if r.candidate_key == key), None)
     fit = _fit_pipeline(
         candidate, report, work, plan, profile, task, config, tuner,
@@ -310,6 +314,35 @@ def refit_champion(
         metadata=metadata,
         metrics_oof=dict(champ_row.all_metrics_mean) if champ_row else {},
         pipeline=fit.pipeline,
+    )
+
+
+def _classical_bundle(
+    candidate: Candidate,
+    selection: SelectionResult,
+    reports: list[ValidationReport],
+    frame: pd.DataFrame,
+    profile: DataProfile,
+    task: TaskSpec,
+    config: RunConfig,
+) -> ModelBundle:
+    """Klasik (StatsForecast) şampiyonu → `ModelBundle` (ADR 0023)."""
+    forecaster = refit_classical(candidate, frame, profile, task, config)
+    champ_row = next((r for r in selection.scoreboard.rows if r.model_key == candidate.key), None)
+    metadata = BundleMetadata(
+        feature_cols=[],
+        feature_set_hash=_feature_hash([candidate.key]),
+        target_col=task.targets[0],
+        model_key=candidate.key,
+        scenario=selection.champion.scenario,
+        best_iteration=None,
+        adaptive_plan_summary={"structure": "per_series_classical"},
+        params={"family": candidate.family, "engine": "statsforecast"},
+    )
+    return ModelBundle(
+        metadata=metadata,
+        metrics_oof=dict(champ_row.all_metrics_mean) if champ_row else {},
+        pipeline=forecaster,
     )
 
 
