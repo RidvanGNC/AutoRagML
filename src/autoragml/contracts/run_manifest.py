@@ -30,6 +30,8 @@ class EnvInfo(Contract):
     os: str
     package_versions: dict[str, str] = Field(default_factory=dict)
     git_commit: str | None = None
+    # nöral (ADR 0030) — yalnız `[neural]` extra kuruluysa dolar (torch/cuda sürüm + device + determinizm)
+    accelerator: dict[str, str] = Field(default_factory=dict)
 
 
 class DataSnapshot(Contract):

@@ -1,6 +1,7 @@
 description: Hızlı tablo — küçük/orta veride pratik varsayılanlar.
 modality_hint: tabular
 hpo_level: light
+neural_enabled: "off"   # ADR 0030: hız önceliği — nöral adaylar hariç
 split_policy:
   kind: kfold
   n_folds: 5

@@ -8,6 +8,20 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 
 ## [Unreleased]
 
+### Eklendi (v1.1)
+- **Nöral tablo katmanı** (ADR 0030) — `[neural]` extra: `pytabkit` + `torch`. Katalog:
+  `real_mlp` (RealMLP-TD, meta-tune edilmiş güçlü default), `tab_m` (TabM, MLP ansamblı),
+  `real_tab_r` (RealTabR). Yeni engine yok — sklearn arayüzlü katalog girişleri.
+  - `models/torch_env.py`: seed + determinizm + cudnn (`configure_torch`, idempotent; torch yoksa no-op).
+  - `models/neural_gate.py`: çalışma-zamanı kapısı — `neural_enabled` (`auto`=GPU varsa / `on` / `off`)
+    × satır bandı (`neural_min_rows`/`neural_max_rows`); pytabkit havuza girince sklearn `mlp` düşer.
+  - `RunConfig` +`neural_enabled`/`neural_device`/`neural_determinism`/`neural_min_rows`/`neural_max_rows`;
+    `tabular_fast` preset → `neural_enabled="off"`.
+  - `EnvInfo.accelerator` (additive) — manifest'e torch/cuda sürüm + device + determinizm modu.
+  - Determinizm varsayılanı `best_effort` (CPU tam deterministik; GPU manifest'e sürüm yazar).
+  - **v1 sınırı:** `FeaturePipeline` nöral adaylara da tam uygulanır (pytabkit çift-transform) → v1.1.
+  - FT-Transformer / mimari arama → ADR 0031.
+
 ### Düzeltildi
 - **Klasik forecaster serving — arbitrary gelecek penceresi** (ADR 0029, m5 benchmark bulgusundan):
   `FittedClassicalForecaster.predict` sabit `sf.predict(h=self._h)` çağırıyordu → yalnız fit sonrası

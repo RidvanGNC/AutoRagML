@@ -1,0 +1,43 @@
+description: >
+  Nöral tablo modelleri (ADR 0030). `[neural]` extra: pytabkit + torch.
+  sklearn arayüzü — GPU auto, kategorik tespit, kendi ön-işleme + train/val erken durdurma.
+  Havuza yalnız GPU varken (veya neural_enabled=on) ve n_rows bantında girerler (dynamics kapısı).
+  FT-Transformer / transformer ailesi → ADR 0031 sonrası mini-ADR.
+
+real_mlp:
+  name: RealMLP-TD
+  family: neural
+  class_path:
+    regression: pytabkit.RealMLP_TD_Regressor
+    classification: pytabkit.RealMLP_TD_Classifier
+  modalities: [tabular, timeseries]
+  tasks: [regression, forecasting, binary_classification, multiclass_classification]
+  predict_kind: [point, proba]
+  requires: [pytabkit]
+  # meta-tune edilmiş default'lar güçlü (RealMLP makalesi) → hpo_level=none'da bile yarışır.
+  # n_cv=1: pytabkit iç ensemble kapalı, bizim ADR 0022 bagging + ADR 0021 GES devrede.
+  default_params: {random_state: 42, n_cv: 1}
+
+tab_m:
+  name: TabM
+  family: neural
+  class_path:
+    regression: pytabkit.TabM_D_Regressor
+    classification: pytabkit.TabM_D_Classifier
+  modalities: [tabular, timeseries]
+  tasks: [regression, forecasting, binary_classification, multiclass_classification]
+  predict_kind: [point, proba]
+  requires: [pytabkit]
+  default_params: {random_state: 42}   # TabM zaten paylaşımlı-parametreli MLP ansamblı
+
+real_tab_r:
+  name: RealTabR-D
+  family: neural
+  class_path:
+    regression: pytabkit.RealTabR_D_Regressor
+    classification: pytabkit.RealTabR_D_Classifier
+  modalities: [tabular]                 # KNN-tabanlı; reduction panelinde pahalı → yalnız tabular
+  tasks: [regression, binary_classification, multiclass_classification]
+  predict_kind: [point, proba]
+  requires: [pytabkit]
+  default_params: {random_state: 42, n_cv: 1}

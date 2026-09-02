@@ -23,6 +23,7 @@ from autoragml.exceptions import EngineError
 from autoragml.fine_tuners import resolve_tuner
 from autoragml.logging import get_logger
 from autoragml.models import apply_model_hints, resolve_candidates
+from autoragml.models.neural_gate import prepare_neural_candidates
 from autoragml.scoring import score_reports
 from autoragml.validators import Tuner, run_validation_suite
 
@@ -63,6 +64,11 @@ def run_core_pipeline(
         logger.info("[engine] %s", msgs[-1])
 
     candidates = apply_model_hints(resolve_candidates(config, task), plan.model_hints)
+    candidates = prepare_neural_candidates(candidates, profile, config)  # ADR 0030 kapısı
+    if any(c.family == "neural" and "pytabkit" in c.requires for c in candidates):
+        from autoragml.models.torch_env import configure_torch
+
+        configure_torch(config.seed, config.neural_determinism, config.neural_device)
     reduction_cands = [c for c in candidates if not (run_classical and is_classical(c))]
     classical_cands = [c for c in candidates if run_classical and is_classical(c)]
     logger.info(

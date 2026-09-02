@@ -37,7 +37,7 @@ _FAMILY_POLICY: dict[str, str] = {
     "gbdt": "minimal",
     "forest": "minimal",
     "linear": "full",
-    "neural": "full",
+    "neural": "minimal",  # ADR 0030: pytabkit kendi ön-işlemesini yapar (v1: bilgi amaçlı)
     "distance": "full",
     "baseline": "none",
     "statistical": "none",

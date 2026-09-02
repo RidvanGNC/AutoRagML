@@ -160,6 +160,13 @@ class RunConfig(Contract):
     classical_forecasting: bool = True  # statsforecast native yolu (ADR 0023); büyük panelde yavaş
     forecast_reduction: Literal["direct", "recursive"] = "direct"  # reduction stratejisi (ADR 0026)
 
+    # --- nöral (ADR 0030) — yalnız `[neural]` extra kuruluysa etkin ---
+    neural_enabled: Literal["auto", "on", "off"] = "auto"  # auto: GPU varsa havuzda, CPU'da değil
+    neural_device: Literal["auto", "cpu", "cuda"] = "auto"
+    neural_determinism: Literal["strict", "best_effort", "off"] = "best_effort"
+    neural_min_rows: int = Field(default=500, ge=1)  # altında nöral aday atlanır
+    neural_max_rows: int | None = Field(default=None, ge=1)  # üstünde atlanır (GPU'da 4× esner)
+
     @model_validator(mode="after")
     def _post_checks(self) -> RunConfig:
         if self.task_hint is Task.FORECASTING and self.time_col is None:

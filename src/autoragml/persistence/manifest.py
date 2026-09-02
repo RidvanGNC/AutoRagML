@@ -29,7 +29,26 @@ _ENV_PACKAGES = (
     "pydantic",
     "pyarrow",
     "joblib",
+    "torch",
+    "pytabkit",
 )
+
+
+def _accelerator_info(config: object) -> dict[str, str]:
+    """Nöral ortam (ADR 0030) — torch yoksa boş."""
+    from autoragml.models.torch_env import cuda_device_name, torch_available, torch_versions
+
+    if not torch_available():
+        return {}
+    vers = torch_versions()
+    info = {"torch": vers["torch"] or "?", "cuda_build": vers["cuda"] or "none"}
+    dev = cuda_device_name()
+    if dev:
+        info["device"] = dev
+    det = getattr(config, "neural_determinism", None)
+    if det:
+        info["determinism"] = str(det)
+    return info
 
 
 def _package_versions() -> dict[str, str]:
@@ -106,6 +125,7 @@ def build_manifest(
         os=sys.platform,
         package_versions=_package_versions(),
         git_commit=_git_commit(),
+        accelerator=_accelerator_info(config),
     )
     return RunManifest(
         run_id=run_id,

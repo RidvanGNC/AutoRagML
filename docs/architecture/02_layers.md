@@ -53,7 +53,7 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
     < 2 anlamlı segment → boş (pooled)
   - `row_policies`: `intermittent_augment:<class>` (havuz genişletir), `filter_low_activity`,
     `coldstart_split` · `regimes`: scenario_2 aktifse trend/volatility/joint
-  - `family_policy`: gbdt/forest→minimal, linear/neural→full
+  - `family_policy`: gbdt/forest→minimal, linear→full, neural→minimal (ADR 0030, v1 bilgi amaçlı)
 - `recipes/` — registry: `@register_recipe` · `RunConfig.dynamics.recipes` +
   `load_recipe_paths` · entry-points `autoragml.recipes`. İsim çakışması → `RecipeError`.
   `planner` recipe adlarını **plan zamanında** doğrular (fail-fast).
@@ -87,6 +87,10 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
 - Katalog: sklearn linear/ridge/lasso/elastic_net/logistic/RF/ET/hist_gbm/mlp ·
   lightgbm (çekirdek) · xgboost/catboost (ops.) · Dummy baseline'lar ·
   statsforecast AutoARIMA/ETS/Theta/MSTL/Croston/TSB (ops. `[timeseries]`) — TS engine tüketir
+- **nöral (ADR 0030, `[neural]`):** `neural.yaml` `real_mlp`/`tab_m`/`real_tab_r` (pytabkit sklearn).
+  `torch_env.configure_torch` (seed+determinizm, idempotent) · `neural_gate.prepare_neural_candidates`
+  (çalışma-zamanı kapısı: `neural_enabled` auto/on/off × GPU × satır bandı; pytabkit varsa `mlp` düşer).
+  `core.run_core_pipeline` çağırır. FT-Transformer + mimari arama → ADR 0031.
 
 ## fine_tuners/  (ADR 0013 — ensemble-öncelikli, multi-fidelity, KOD YAZILDI)
 - **Girdi:** `validators.Tuner` protokolü (candidate + dış-fold train frame + plan + config)
