@@ -17,8 +17,12 @@ koşar. Serving her seriyi grup kimliğiyle kendi segmentinin `ModelBundle`'ına
 
 - **v1 birincil ölçüt: SBC intermittency sınıfı** (`profile.timeseries.per_series[].intermittency_class`
   — smooth / intermittent / erratic / lumpy). Zaten hesaplanıyor; M5 problemine doğrudan oturur.
+- **Kesikli-baskınlık kapısı (tourism regresyonundan):** yalnız `(intermittent + lumpy) / total ≥
+  segment_sparse_min_frac` (vars. 0.5) ise segmentle. Düzgün/erratic çoğunluklu panelde pooled
+  cross-series öğrenme, az-veri "hard" serilere yardım ediyor — segmentleyince o seriler
+  `dummy_median`'a düşüyor. M5 ~%90 kesikli → segment; tourism ~%18 → pooled.
 - Küçük segmentler (`< dynamics.segment_min_series`, vars. 30) en yakın komşuya birleştirilir
-  (ADI'ye göre sıralı: smooth↔intermittent↔lumpy↔erratic).
+  (ADI'ye göre sıralı: smooth↔erratic↔intermittent↔lumpy).
 - Segment sayısı ≤ 4. Tek anlamlı segment kalırsa → **pooled** (fayda yok, mesaj).
 - Segmentlenmemiş seriler (per-series profili yok → kısa) → en büyük segmente.
 
@@ -72,3 +76,7 @@ nihai holdout 75.9 → 74.6, süre 5679s → 3055s. 3 segment: `smooth+erratic`(
 OOF **53.6**, `intermittent`(291)→`weighted_ensemble` 94.9, `lumpy`(71)→`auto_arima` 86.2.
 Ana kazanç: 38 düzgün seri artık kesikli dinamiğe sürüklenmiyor (pooled ~80 → segment 53.6).
 (0027 guardrail + 0029 klasik serving düzeltmeleriyle birlikte.)
+
+**tourism_large: segmentleyince +10.3% → +8.9% (hafif regresyon)** — `lumpy`(98) segmenti
+`dummy_median`'a düştü (pooled'da cross-series öğrenme yardım ediyordu). → **kesikli-baskınlık
+kapısı eklendi**: tourism %18 kesikli → artık pooled (regresyon geri alındı).

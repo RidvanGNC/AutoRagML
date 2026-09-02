@@ -215,6 +215,19 @@ def _resolve_segments(profile: DataProfile, task: TaskSpec, cfg: DynamicsConfig)
             cls = IntermittencyClass.INTERMITTENT  # kısa/az-aktif seriler intermittent'a
         by_class.setdefault(cls, []).append(sp.group)
 
+    # Yalnız kesikli/lumpy-baskın panelde segmentle: düzgün/erratic çoğunluklu panelde pooled
+    # cross-series öğrenme, hard serilere yardım ediyor (tourism +10.3% → +8.9% regresyonu, ADR 0028).
+    total = len(ts.per_series)
+    sparse = len(by_class.get(IntermittencyClass.INTERMITTENT, [])) + len(
+        by_class.get(IntermittencyClass.LUMPY, [])
+    )
+    if total == 0 or sparse / total < cfg.segment_sparse_min_frac:
+        logger.info(
+            "[dynamics] segment atlandı — panel yeterince kesikli değil (%.0f%% < %.0f%%)",
+            sparse / max(total, 1) * 100, cfg.segment_sparse_min_frac * 100,
+        )
+        return []
+
     # sıralı eksende küçük grupları komşuya kaydır
     ordered = [(c, by_class.get(c, [])) for c in _SEGMENT_ORDER if by_class.get(c)]
     if not ordered:

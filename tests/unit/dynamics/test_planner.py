@@ -163,12 +163,12 @@ def test_segments_split_by_intermittency_class() -> None:
     days = pd.date_range("2023-01-02", periods=200, freq="D")
     rng = np.random.default_rng(20)
     rows: list[dict[str, object]] = []
-    for i in range(6):  # düzgün (smooth) seriler
+    for i in range(4):  # düzgün (smooth) seriler
         for j, d in enumerate(days):
             rows.append({"g": f"sm{i}", "ds": d, "y": 50 + 10 * np.sin(j / 7 * 6.28) + rng.normal(0, 2)})
-    for i in range(6):  # kesikli (intermittent) seriler
+    for i in range(8):  # kesikli (intermittent) seriler — panel kesikli-baskın (8/12)
         for d in days:
-            rows.append({"g": f"it{i}", "ds": d, "y": float(rng.integers(1, 5)) if rng.random() < 0.15 else 0.0})
+            rows.append({"g": f"it{i}", "ds": d, "y": float(rng.integers(1, 5)) if rng.random() < 0.12 else 0.0})
     plan, _, _ = _plan(
         pd.DataFrame(rows), time_col="ds", group_col="g", split_policy={"horizon": 7},
         dynamics={"structure": "per_group_champion", "segment_min_series": 3},
@@ -176,9 +176,26 @@ def test_segments_split_by_intermittency_class() -> None:
     assert plan.structure == "per_group_champion"
     assert len(plan.segments) >= 2
     all_ids = {gid for seg in plan.segments for gid in seg.group_ids}
-    assert all_ids == {f"sm{i}" for i in range(6)} | {f"it{i}" for i in range(6)}
+    assert all_ids == {f"sm{i}" for i in range(4)} | {f"it{i}" for i in range(8)}
     # her seri tam bir segmentte
     assert sum(len(seg.group_ids) for seg in plan.segments) == 12
+
+
+def test_no_segments_when_panel_not_sparse() -> None:
+    """ADR 0028: düzgün-baskın panel → segment YOK (pooled cross-learning korunur)."""
+    days = pd.date_range("2023-01-02", periods=180, freq="D")
+    rng = np.random.default_rng(21)
+    rows: list[dict[str, object]] = []
+    for i in range(10):  # düzgün + erratic karışık ama kesikli değil
+        scale = 3 + i
+        for j, d in enumerate(days):
+            rows.append({"g": f"s{i}", "ds": d, "y": 40 + 8 * np.sin(j / 7 * 6.28) + rng.normal(0, scale)})
+    plan, _, _ = _plan(
+        pd.DataFrame(rows), time_col="ds", group_col="g", split_policy={"horizon": 7},
+        dynamics={"structure": "per_group_champion", "segment_min_series": 3},
+    )
+    assert plan.structure == "per_group_champion"
+    assert plan.segments == []  # kesikli değil → pooled
 
 
 def test_seasonal_difference_default_for_trending_seasonal_panel() -> None:

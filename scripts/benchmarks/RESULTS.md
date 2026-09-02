@@ -137,6 +137,12 @@ m5: recursive multi-step + per-grup olmadan rich features tek başına yetmiyor 
 - **Harness:** `champion_family` "segmented" satırını tanımıyordu → `_combined_scoreboard` sentetik
   `segmented` satırı ekledi.
 
+**tourism_large — segmentasyon HAFİF REGRESYON → kapı eklendi:** segmentleyince +10.3% → +8.9%
+(`lumpy`(98) segmenti `dummy_median`'a düştü; pooled'da cross-series öğrenme yardım ediyordu).
+Panel yalnız %18 kesikli+lumpy. **Çözüm:** `_resolve_segments` kesikli-baskınlık kapısı
+(`(intermittent + lumpy) / total ≥ segment_sparse_min_frac=0.5`) — tourism artık pooled
+(+10.3%), M5 (%90) segment kalıyor.
+
 ## Sonraki dalgalar
 - **ADR 0028+0029 birlikte:** m5 `--only m5_subset` (SBC segmentasyonu + düzeltilmiş klasik serving) — pending.
 - **3. dalga:** yüksek boyut/seyrek, ordinal, quantile; `--hpo light/thorough` karşılaştırması.

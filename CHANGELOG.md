@@ -34,8 +34,12 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
   segmentinin şampiyonuna yönlendirir (bilinmeyen kimlik → en büyük segment). Şampiyon tek
   `ModelBundle` (`pipeline` = `FittedSegmentedPipeline`, segment→model haritası
   `adaptive_plan_summary`). Sözleşme: `AdaptivePlan.segments` + `SegmentSpec`,
-  `DynamicsConfig.segment_min_series`/`segment_max_count` (additive). `engines/segmented.py`.
-  Birleşik scoreboard: sentetik `segmented` satırı (boyut-ağırlıklı metrikler) + `segment::model` satırları.
+  `DynamicsConfig.segment_min_series`/`segment_max_count`/`segment_sparse_min_frac` (additive).
+  `engines/segmented.py`. Birleşik scoreboard: sentetik `segmented` satırı (boyut-ağırlıklı
+  metrikler) + `segment::model` satırları.
+  **Kesikli-baskınlık kapısı:** yalnız `(intermittent + lumpy) / total ≥ 0.5` ise segmentle —
+  düzgün-baskın panelde pooled cross-series öğrenme hard serilere yardım ediyor (tourism +10.3%
+  segmentleyince +8.9%'a düşüyordu → kapı ile geri alındı).
   **v1 sınırı:** çok-seviyeli hiyerarşi (store/dept) + segment-arası ensemble + k-means kümeleme → v1.1.
   **Benchmark (m5_subset, `--hpo none`):** ilk kez seasonal-naive'i geçti — test wMAPE 105.2→83.3
   (**+16.4%**), 3 segment (smooth+erratic/intermittent/lumpy), süre 5679s→3055s.

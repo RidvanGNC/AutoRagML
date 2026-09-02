@@ -23,6 +23,9 @@ class DynamicsConfig(Contract):
     # Segmentasyon (ADR 0028) — per_group_champion iken seriler segmentlere bölünür
     segment_min_series: int = Field(default=30, ge=2)  # altında segment komşuya birleşir
     segment_max_count: int = Field(default=4, ge=1)
+    # Yalnız panelin bu oranı kesikli/lumpy ise segmentle (aksi halde pooled cross-learning kazanır —
+    # tourism benchmark regresyonundan, ADR 0028). M5 ~%90 → segment; tourism ~%18 → pooled.
+    segment_sparse_min_frac: float = Field(default=0.5, ge=0.0, le=1.0)
 
     # candidate_ops seçenekleri (HPO uzayında seçilir — ADR 0015)
     numeric_transform_choices: list[str] = Field(

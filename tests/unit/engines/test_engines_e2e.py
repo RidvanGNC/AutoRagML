@@ -138,16 +138,16 @@ def test_timeseries_engine_recursive_reduction() -> None:
 
 
 def _mixed_intermittency_panel() -> pd.DataFrame:
-    """Yarısı düzgün, yarısı kesikli aylık seriler — SBC segmentasyonu tetikler (ADR 0028)."""
+    """Kesikli-baskın aylık panel (6/9 kesikli) — SBC segmentasyonu tetikler (ADR 0028)."""
     months = pd.date_range("2019-01-01", periods=72, freq="MS")
     rng = np.random.default_rng(7)
     rows: list[dict[str, object]] = []
-    for i in range(4):
+    for i in range(3):
         for j, m in enumerate(months):
             rows.append({"g": f"sm{i}", "ds": m, "y": max(0.0, 80 + 15 * np.sin(j / 12 * 6.28) + rng.normal(0, 4))})
-    for i in range(4):
+    for i in range(6):
         for m in months:
-            rows.append({"g": f"it{i}", "ds": m, "y": float(rng.integers(2, 9)) if rng.random() < 0.2 else 0.0})
+            rows.append({"g": f"it{i}", "ds": m, "y": float(rng.integers(2, 9)) if rng.random() < 0.15 else 0.0})
     return pd.DataFrame(rows)
 
 
