@@ -150,12 +150,16 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
 - `select_engine(task, config)` → `TabularCoreEngine` | `TimeSeriesCoreEngine`
   (`RunConfig.engines={"key": ...}` override)
 - `core.run_core_pipeline` (ortak): `build_plan` → `resolve_candidates` →
-  `run_validation_suite(tuner=resolve_tuner(config))` → `score_reports` → `refit_champion`
-  (tüm train; ES modelde `n_estimators`=validation `best_iteration` medyanı) → `ModelBundle`
+  `run_validation_suite(tuner=resolve_tuner(config))` → `build_weighted_ensemble` → `score_reports` →
+  `refit_champion` → `ModelBundle`
 - `timeseries/reduction.py` — **leakage-safe** lag/rolling/ewm özellikleri (`shift ≥ horizon`);
   yeni kolonlar profile'a eklenir; `pre_transform` bundle'a gömülür (predict'te yeniden uygulanır)
-- `champion.py` + `model_pipeline.py` — `FittedModelPipeline` (`ModelBundle.pipeline`;
-  `raw_df → pre_transform? → feature pipeline → estimator → target inverse`)
+- `champion.py` — **k-fold bagged refit (ADR 0022, varsayılan)**: tek model / %100 train yerine
+  `bagging.folds` (5) fold-modeli, serving = ortalama (`FittedEnsemblePipeline` eşit ağırlık);
+  bagged OOF postprocess'e girer. `k<2` / `bagging.enabled=False` / sınıflandırma → tek model
+  (`refit_full` benzeri). GES şampiyonda üyeler de bagged. `_fit_one` (feature pipeline + target +
+  estimator+ES), `_fit_pipeline` (bag/tek karar). `model_pipeline.FittedModelPipeline` +
+  `ensemble_pipeline.FittedEnsemblePipeline` (`Predictor` protokolü)
 - `runners/InProcessRunner` — engine'i sarar; çökme → `EngineResult(status=FAILED)`
 - **v1 sınırı:** `per_group_champion` planlanır ama pooled ile ilerlenir (per-group refit v1.1)
 

@@ -93,6 +93,14 @@ class GuardrailConfig(Contract):
     model_scenario_blocklist: dict[str, list[str]] = Field(default_factory=dict)
 
 
+class BaggingConfig(Contract):
+    """Şampiyon refit k-fold bagging (ADR 0022). AutoGluon deseni: k child, tahmin ortalaması."""
+
+    enabled: bool = True
+    folds: int = Field(default=5, ge=2)
+    max_rows: int | None = Field(default=None, ge=1)  # üstünde tek-model refit (süre kaçış kapısı)
+
+
 class EnsembleConfig(Contract):
     """Caruana greedy ensemble selection ayarları (ADR 0021)."""
 
@@ -137,6 +145,7 @@ class RunConfig(Contract):
     promotion: PromotionConfig = Field(default_factory=PromotionConfig)
     postprocess: PostprocessConfig = Field(default_factory=PostprocessConfig)
     ensemble: EnsembleConfig = Field(default_factory=EnsembleConfig)
+    bagging: BaggingConfig = Field(default_factory=BaggingConfig)
 
     # --- modelleme ---
     scenarios: list[str] = Field(default_factory=lambda: ["scenario_1"])

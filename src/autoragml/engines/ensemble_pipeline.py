@@ -7,27 +7,30 @@ alır, ardından **tek** ensemble-düzeyi postprocessor çalıştırır.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
 
-from autoragml.engines.model_pipeline import FittedModelPipeline
+from autoragml.engines.model_pipeline import Predictor
 from autoragml.postprocessors import FittedPostprocessor
 
 _Arr = npt.NDArray[np.float64]
 
 
 class FittedEnsemblePipeline:
-    """Ağırlıklı üye-tahmin ortalaması + ensemble-düzeyi postprocess — tek `predict`."""
+    """Ağırlıklı üye-tahmin ortalaması + ensemble-düzeyi postprocess — tek `predict`.
+
+    Üyeler `FittedModelPipeline` (GES) veya iç içe `FittedEnsemblePipeline` (bagged üye — ADR 0022).
+    """
 
     __slots__ = ("_members", "_postprocessor", "_pre_transform", "_weights")
 
     def __init__(
         self,
         *,
-        members: list[FittedModelPipeline],
+        members: Sequence[Predictor],
         weights: list[float],
         pre_transform: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
         postprocessor: FittedPostprocessor | None = None,
@@ -35,7 +38,7 @@ class FittedEnsemblePipeline:
         if len(members) != len(weights) or not members:
             msg = "FittedEnsemblePipeline: üye/ağırlık sayısı tutarsız"
             raise ValueError(msg)
-        self._members = members
+        self._members = list(members)
         self._weights = np.asarray(weights, dtype=np.float64)
         self._pre_transform = pre_transform
         self._postprocessor = postprocessor
@@ -57,7 +60,7 @@ class FittedEnsemblePipeline:
         return sorted(cols)
 
     @property
-    def members(self) -> list[FittedModelPipeline]:
+    def members(self) -> list[Predictor]:
         return list(self._members)
 
     @property

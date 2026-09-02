@@ -47,6 +47,7 @@ from autoragml.contracts.postprocess_config import (
 )
 from autoragml.contracts.promotion_config import PromotionConfig
 from autoragml.contracts.run_config import (
+    BaggingConfig,
     BudgetConfig,
     EnsembleConfig,
     GuardrailConfig,
@@ -84,6 +85,7 @@ from autoragml.contracts.validation_config import ValidationConfig
 __all__ = [
     "AdaptivePlan",
     "AnalyzerConfig",
+    "BaggingConfig",
     "BudgetConfig",
     "BundleMetadata",
     "CalibrateConfig",

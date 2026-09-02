@@ -7,7 +7,7 @@ Ham DataFrame → feature pipeline → X → estimator → hedef inverse → tah
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
 import numpy.typing as npt
@@ -18,6 +18,16 @@ from autoragml.preprocessors.target import FittedTargetTransform
 from autoragml.transform import FittedTransform
 
 _Arr = npt.NDArray[np.float64]
+
+
+@runtime_checkable
+class Predictor(Protocol):
+    """`predict` + `feature_cols` sunan fitted nesne — bag/ensemble üyeleri bu protokolü karşılar."""
+
+    def predict(self, frame: pd.DataFrame) -> _Arr: ...
+
+    @property
+    def feature_cols(self) -> list[str]: ...
 
 
 class FittedModelPipeline:

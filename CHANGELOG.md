@@ -9,6 +9,17 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 ## [Unreleased]
 
 ### Eklendi
+- **k-fold bagged şampiyon refit** (ADR 0022): benchmark bulgusu — `--hpo light` 6 datasetin 4'ünde
+  `none`'dan **kötü** (tek iç fold → val'a aşırı-uyum) + bagging yoktu.
+  - `refit_champion`: tek model / %100 train yerine `bagging.folds` (5) fold-modeli; serving = ortalama
+    (`FittedEnsemblePipeline` eşit ağırlık). Bagged OOF postprocess'e girer. `k<2` / `bagging.enabled=False` /
+    `n_rows>bagging.max_rows` / **sınıflandırma** → tek model refit (`refit_full` benzeri).
+  - GES `weighted_ensemble` şampiyonda üyeler de bagged (iç içe `FittedEnsemblePipeline`).
+  - `resolve_tuner`: `light` HPO artık **2 iç fold** (eskiden 1); `thorough` 3.
+  - Sözleşme: `RunConfig.bagging` (`BaggingConfig`), `BundleMetadata.ensemble={"bagged":true,...}`,
+    `engines.model_pipeline.Predictor` protokolü.
+  - **v1 sınırı:** sınıflandırma bagging (olasılık ortalaması + argmax) → v1.1.
+  - `tests/unit/engines/test_bagging.py` — 5 test.
 - **`ensembling/` katmanı** (ADR 0021): Caruana greedy ensemble selection (+ bagged-GES).
   - `greedy.py` — saf numpy GES: her tur validation'ı en çok iyileştiren modeli **tekrarlı** ekle;
     6-ondalık tie yuvarlama + en düşük indeks tie-break + **use_best**. `bagged_greedy_selection`

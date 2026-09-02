@@ -38,7 +38,7 @@ def test_resolve_tuner_by_level_and_backend() -> None:
     none_cfg = resolve_run_config(target="y", overrides={"hpo_level": "none"}).config
     assert isinstance(resolve_tuner(none_cfg), DefaultTuner)
     light = resolve_tuner(resolve_run_config(target="y").config)
-    assert isinstance(light, RandomSearchTuner) and light.inner_folds == 1
+    assert isinstance(light, RandomSearchTuner) and light.inner_folds == 2  # ADR 0022
     thorough = resolve_tuner(resolve_run_config(target="y", overrides={"hpo_level": "thorough"}).config)
     assert isinstance(thorough, RandomSearchTuner) and thorough.inner_folds == 3
     opt = resolve_tuner(resolve_run_config(target="y", overrides={"hpo_backend": "optuna"}).config)

@@ -42,7 +42,9 @@ def resolve_tuner(config: RunConfig) -> Tuner:
     """`RunConfig.hpo_level` + `hpo_backend` → hazır `Tuner`."""
     if config.hpo_level is HpoLevel.NONE:
         return DefaultTuner()
-    inner_folds = 1 if config.hpo_level is HpoLevel.LIGHT else 3
+    # ADR 0022: tek iç fold → yüksek varyanslı config seçimi (val'a aşırı-uyum).
+    # `light` bile en az 2 iç fold kullanır; `thorough` 3.
+    inner_folds = 2 if config.hpo_level is HpoLevel.LIGHT else 3
     if config.hpo_backend is HpoBackend.OPTUNA:
         return OptunaTuner(inner_folds=inner_folds)
     return RandomSearchTuner(inner_folds=inner_folds)
