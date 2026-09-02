@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, model_validator
 
@@ -157,6 +158,7 @@ class RunConfig(Contract):
     engines: dict[str, object] | None = None
     model_catalog_override: list[Path] = Field(default_factory=list)
     classical_forecasting: bool = True  # statsforecast native yolu (ADR 0023); büyük panelde yavaş
+    forecast_reduction: Literal["direct", "recursive"] = "direct"  # reduction stratejisi (ADR 0026)
 
     @model_validator(mode="after")
     def _post_checks(self) -> RunConfig:

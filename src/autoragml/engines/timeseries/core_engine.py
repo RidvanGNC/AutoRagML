@@ -49,6 +49,11 @@ class TimeSeriesCoreEngine:
         horizon = task.horizon or (config.split_policy.horizon if config.split_policy else None) or 4
         season = _season_length(profile, _resolve_freq(profile))
 
+        if config.forecast_reduction == "recursive":
+            return self._run_recursive(
+                frame, config, profile, task, tuner, int(horizon), int(season)
+            )
+
         augmented, new_cols = build_reduction_features(
             frame, task, horizon=int(horizon), season=int(season)
         )
@@ -72,4 +77,34 @@ class TimeSeriesCoreEngine:
             self.key, augmented, profile, task, config,
             tuner=tuner, messages=messages, pre_transform=pre_transform,
             run_classical=config.classical_forecasting,
+        )
+
+    def _run_recursive(
+        self,
+        frame: pd.DataFrame,
+        config: RunConfig,
+        profile: DataProfile,
+        task: TaskSpec,
+        tuner: Tuner | None,
+        horizon: int,
+        season: int,
+    ) -> EngineResult:
+        """Recursive multi-step yolu (ADR 0026 B). Özellikler `run_recursive_reports` içinde
+        fold-başına kurulur; burada yalnız profili zenginleştirip planın impute/scale
+        adımlarının lag kolonlarını kapsamasını sağlarız."""
+        aug, new_cols = build_reduction_features(
+            frame, task, horizon=1, season=season, strategy="recursive"
+        )
+        messages = [f"forecast_reduction=recursive (h={horizon}, s={season})"]
+        if new_cols:
+            extra = build_column_profiles(
+                aug[new_cols], target=task.targets[0], thr=config.analyzers.thresholds, sampled=False
+            )
+            profile = profile.model_copy(update={"columns": [*profile.columns, *extra]})
+            messages.append(f"recursive reduction: {len(new_cols)} özellik (shift≥1).")
+        return run_core_pipeline(
+            self.key, frame, profile, task, config,
+            tuner=tuner, messages=messages, pre_transform=None,
+            run_classical=config.classical_forecasting,
+            recursive=True, recursive_season=season,
         )

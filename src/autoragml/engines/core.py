@@ -40,11 +40,16 @@ def run_core_pipeline(
     messages: list[str] | None = None,
     pre_transform: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
     run_classical: bool = False,
+    recursive: bool = False,
+    recursive_season: int = 1,
 ) -> EngineResult:
     """Standart dynamics→models→validators→scoring→refit akışı.
 
     `run_classical=True` (TS engine): klasik adaylar (`family∈{statistical,intermittent}`)
     `StatsForecast` native yolundan geçer, reduction adayları normal suite'ten (ADR 0023).
+
+    `recursive=True` (ADR 0026 B): reduction adayları `shift(1)` özelliğiyle 1-adım eğitilir,
+    recursive-h rolling-origin CV ile doğrulanır; `weighted_ensemble` devre dışı.
     """
     msgs = list(messages or [])
     degraded = False  # yalnız gerçek sorunlar PARTIAL yapar; ensemble/reduction bilgi amaçlı
@@ -63,7 +68,16 @@ def run_core_pipeline(
         "[engine %s] %d reduction + %d klasik aday", engine_key, len(reduction_cands), len(classical_cands)
     )
 
-    reports = run_validation_suite(reduction_cands, frame, plan, profile, task, config, tuner=tuner)
+    if recursive:
+        from autoragml.engines.timeseries.recursive import run_recursive_reports
+
+        reports = run_recursive_reports(
+            frame, profile, task, config, reduction_cands, plan, season=recursive_season
+        )
+    else:
+        reports = run_validation_suite(
+            reduction_cands, frame, plan, profile, task, config, tuner=tuner
+        )
     if classical_cands:
         cl_reports, cl_extra_cands = run_classical_reports(
             frame, profile, task, config, classical_cands
@@ -79,7 +93,7 @@ def run_core_pipeline(
         msgs.append(f"doğrulanamayan adaylar: {sorted(failed)}")
         degraded = True
 
-    ensemble = build_weighted_ensemble(reports, candidates, config, task, profile)
+    ensemble = None if recursive else build_weighted_ensemble(reports, candidates, config, task, profile)
     if ensemble is not None:
         ens_report, ens_candidate, ens_spec = ensemble
         reports = [*reports, ens_report]
@@ -93,6 +107,7 @@ def run_core_pipeline(
     champion = refit_champion(
         selection, candidates, reports, frame, plan, profile, task, config,
         tuner=tuner, pre_transform=pre_transform,
+        recursive_season=recursive_season if recursive else None,
     )
 
     status = EngineStatus.PARTIAL if degraded else EngineStatus.SUCCESS

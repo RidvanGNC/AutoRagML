@@ -114,6 +114,29 @@ def test_timeseries_engine_classical_competes() -> None:
     assert not np.isnan(pred).any()
 
 
+def test_timeseries_engine_recursive_reduction() -> None:
+    """ADR 0026 B: forecast_reduction=recursive → 1-adım model + recursive-h serving."""
+    df = _panel_df()
+    ds, cfg, profile, task = _prep(
+        df,
+        time_col="ds",
+        group_col="g",
+        classical_forecasting=False,
+        forecast_reduction="recursive",
+        split_policy={"horizon": 4},
+    )
+    result = InProcessRunner().run(TimeSeriesCoreEngine(), ds, cfg, profile, task)
+    assert result.status in {EngineStatus.SUCCESS, EngineStatus.PARTIAL}
+    assert any("recursive" in m for m in result.messages)
+    assert result.champion.metadata.params.get("strategy") == "recursive"
+    # ansambl recursive modda devre dışı
+    assert all(r.model_key != "weighted_ensemble" for r in result.scoreboard.rows)
+    pred = result.champion.pipeline.predict(df)
+    assert len(pred) == len(df)
+    tail = df.groupby("g", sort=False).cumcount(ascending=False) < 4
+    assert not np.isnan(pred[tail.to_numpy()]).any()  # tahmin ufku dolu
+
+
 def test_postprocess_embedded_in_champion_bundle() -> None:
     ds, cfg, profile, task = _prep(
         _tabular_df(), postprocess={"clip": {"lower": 5.0, "auto_nonneg": False}}

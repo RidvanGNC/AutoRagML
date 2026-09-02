@@ -283,6 +283,7 @@ def refit_champion(
     *,
     tuner: Tuner | None = None,
     pre_transform: Transform | None = None,
+    recursive_season: int | None = None,
 ) -> ModelBundle:
     """Şampiyonu tüm veride yeniden fit et → `ModelBundle`."""
     key = selection.champion.model_key
@@ -293,6 +294,11 @@ def refit_champion(
 
     tuner = tuner or DefaultTuner()
     work = frame.reset_index(drop=True)
+
+    if recursive_season is not None and key != CLASSICAL_ENSEMBLE_KEY and not is_classical(candidate):
+        return _recursive_bundle(
+            candidate, selection, work, plan, profile, task, config, season=recursive_season
+        )
 
     if key == ENSEMBLE_KEY:
         return _refit_ensemble(
@@ -334,6 +340,47 @@ def refit_champion(
         metadata=metadata,
         metrics_oof=dict(champ_row.all_metrics_mean) if champ_row else {},
         pipeline=fit.pipeline,
+    )
+
+
+def _recursive_bundle(
+    candidate: Candidate,
+    selection: SelectionResult,
+    work: pd.DataFrame,
+    plan: AdaptivePlan,
+    profile: DataProfile,
+    task: TaskSpec,
+    config: RunConfig,
+    *,
+    season: int,
+) -> ModelBundle:
+    """Recursive reduction şampiyonu → tek 1-adım model + `FittedRecursivePipeline` (ADR 0026 B)."""
+    from autoragml.engines.timeseries.recursive import fit_recursive_champion
+
+    horizon = int(task.horizon or (config.split_policy.horizon if config.split_policy else None) or 4)
+    choices = {g.group_name: g.default for g in plan.candidate_ops}
+    pipeline = fit_recursive_champion(
+        candidate, choices, work, plan, profile, task, config, season=season
+    )
+    champ_row = next((r for r in selection.scoreboard.rows if r.model_key == candidate.key), None)
+    metadata = BundleMetadata(
+        feature_cols=pipeline.feature_cols,
+        feature_set_hash=_feature_hash(pipeline.feature_cols),
+        target_col=task.targets[0],
+        model_key=candidate.key,
+        scenario=selection.champion.scenario,
+        best_iteration=None,
+        adaptive_plan_summary={
+            "structure": "recursive_reduction",
+            "committed_ops": len(plan.committed_ops),
+            "candidate_choices": choices,
+        },
+        params={"strategy": "recursive", "horizon": horizon, "season": season},
+    )
+    return ModelBundle(
+        metadata=metadata,
+        metrics_oof=dict(champ_row.all_metrics_mean) if champ_row else {},
+        pipeline=pipeline,
     )
 
 

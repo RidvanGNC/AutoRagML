@@ -155,9 +155,17 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
 - `timeseries/reduction.py` (ADR 0004/0025) — **leakage-safe** zengin özellikler (`shift ≥ horizon`):
   lag + **mevsim-hizalı lag** (`slag`) + rolling mean/std/**min/max** + **mevsimsel rolling** +
   ewm + **fark** (`diff1`, `diffs`) + **takvim** (month/dow/... + sin/cos döngüsel).
-  `build_reduction_features(frame, task, *, horizon, season, add_calendar)`; `season` engine'den
-  (`_season_length`); yeni kolonlar profile'a; `pre_transform` bundle'a (predict'te yeniden).
-  Gerçek target differencing + recursive multi-step → v1.1/ADR 0026
+  `build_reduction_features(frame, task, *, horizon, season, add_calendar, strategy, max_lag)`;
+  `season` engine'den (`_season_length`); yeni kolonlar profile'a; `pre_transform` bundle'a.
+  **seasonal target differencing (ADR 0026 A):** seasonal + `strategy="direct"` → `y_sdiff_ref`
+  kolonu (`shift(H≥h)`); `TargetTransform` `seasonal_difference` seçeneği `forward=y−ref`/`inverse=y+ref`;
+  `sdiff_ref`/`sdiff_ref_col` (frame_ops); `FittedModelPipeline.target_ref_col` slotu; planner
+  `s≥h` + trend/mevsim gücü → varsayılan.
+- `timeseries/recursive.py` (ADR 0026 B) — `RunConfig.forecast_reduction="recursive"`:
+  `strategy="recursive"` (`shift(1)` tabanı, lag `1..k_max`); model 1-adım eğitilir,
+  **`run_recursive_reports`** rolling-origin fold'da test bloğunu **recursive-`h`** tahmin eder
+  (OOF = birikimli hata). Serving `FittedRecursivePipeline` (per-seri son `h` satır recursive).
+  `run_core_pipeline(recursive=, recursive_season=)`; ansambl + bagging recursive modda kapalı.
 - `timeseries/classical.py` (ADR 0023/0024) — klasik adaylar (`family∈{statistical,intermittent}`)
   **Nixtla `StatsForecast` native yolu**: `cross_validation` → OOF (rolling-origin, adaptif
   pencere + kısa seri filtresi + `SeasonalNaive` fallback) → per-model `ValidationReport` **+

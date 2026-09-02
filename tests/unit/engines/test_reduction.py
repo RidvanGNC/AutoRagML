@@ -84,6 +84,24 @@ def test_reduction_sdiff_ref_leakage_safe() -> None:
             assert v <= t - 4 + 1e-9  # y(t-12) ≤ y(t-4)
 
 
+def test_reduction_recursive_strategy_shift1_lags() -> None:
+    """ADR 0026 B: recursive → `shift(1)` tabanı, lag 1..k_max; sdiff_ref üretilmez."""
+    out, cols = build_reduction_features(_panel(120), _TASK, horizon=4, season=12, strategy="recursive")
+    assert "y_lag_1" in cols and "y_lag_2" in cols
+    assert "y_sdiff_ref" not in cols  # recursive'de seasonal target differencing yok
+    assert "y_diff1_lag_1" in cols  # fark özelliği shift(1) tabanlı
+    a = out[out["g"] == "A"].sort_values("ds").reset_index(drop=True)  # y = step index
+    assert np.isnan(a["y_lag_1"].iloc[0])
+    assert a["y_lag_1"].iloc[10] == 9.0  # bir önceki dönem
+    # leakage: her hedef-türevi kolon ≤ y(t-1) = t-1
+    derived = [c for c in cols if not c.startswith("y_cal_") and c != "y_step_index"]
+    for t in range(30, 100):
+        for col in derived:
+            v = a[col].iloc[t]
+            if not np.isnan(v):
+                assert v <= t - 1 + 1e-6, f"{col}@{t} = {v} > {t - 1}"
+
+
 def test_reduction_noop_without_time_col() -> None:
     task = TaskSpec(task=Task.REGRESSION, modality=Modality.TABULAR, targets=["y"])
     df = pd.DataFrame({"y": [1.0, 2.0], "x": [3.0, 4.0]})

@@ -9,6 +9,20 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 ## [Unreleased]
 
 ### Eklendi
+- **Recursive multi-step reduction** (ADR 0026 Bölüm B, gap analizi Gap #4 — M5/AutoGluon-TS deseni):
+  `RunConfig.forecast_reduction: Literal["direct", "recursive"] = "direct"`.
+  - `build_reduction_features(strategy="recursive", max_lag=None)`: `shift(1)` tabanı, lag `1..k_max`
+    (`k_max = max(h, 3s, 12)`), rolling/ewm/min-max `shift(1)` üzerinde; `y_sdiff_ref` üretilmez.
+  - Model **1-adım-ileri** eğitilir; **CV recursive-`h`**: `run_recursive_reports` rolling-origin
+    fold'da test bloğunu adım-adım tahmin eder (özellikler yeniden kurulur, tahmin geri beslenir) →
+    OOF birikimli-hata skoru serving davranışını ölçer.
+  - **Serving:** `FittedRecursivePipeline` (`Predictor` protokolü, `__slots__`, joblib-picklable) —
+    her seri son `horizon` satır recursive, kalan `NaN`. `RecursiveRecipe` saf param (`TaskSpec` +
+    `season` + `add_calendar` + `horizon`).
+  - `weighted_ensemble` recursive modda devre dışı (ansambl refit direct özellik kurar); bagging yok
+    (tek 1-adım model refit).
+  - Sözleşme: `run_core_pipeline(recursive=, recursive_season=)`, `refit_champion(recursive_season=)`.
+  - `tests/unit/engines/test_reduction.py` +1 (recursive lag leakage-safe), `test_engines_e2e.py` +1.
 - **Seasonal target differencing** (ADR 0026 Bölüm A): `candidate_ops` `target` grubuna
   `seasonal_difference` seçeneği — forecasting + mevsim ≥ horizon + trend/mevsim gücü → **varsayılan**.
   Eğitim hedefi `y_t − y_{t−s}` (leakage-safe: `s ≥ h` iken `y_{t−s}` train aktüeli); tersine çevirme

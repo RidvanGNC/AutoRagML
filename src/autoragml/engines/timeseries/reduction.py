@@ -9,6 +9,7 @@ Recursive/iteratif çok-adım → ADR 0026.
 from __future__ import annotations
 
 import math
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -57,8 +58,14 @@ def build_reduction_features(
     horizon: int,
     season: int = 1,
     add_calendar: bool = True,
+    strategy: Literal["direct", "recursive"] = "direct",
+    max_lag: int | None = None,
 ) -> tuple[pd.DataFrame, list[str]]:
-    """Long-format TS frame'ine zengin hedef-türevi + takvim özellikleri ekle → (frame, yeni_kolonlar)."""
+    """Long-format TS frame'ine zengin hedef-türevi + takvim özellikleri ekle → (frame, yeni_kolonlar).
+
+    `direct` (ADR 0004): `shift(horizon)` tabanı, h-adım direkt. `recursive` (ADR 0026):
+    `shift(1)` tabanı, lag 1..max_lag; model 1-adım eğitilir, serving `FittedRecursivePipeline`.
+    """
     target = task.targets[0]
     time_col = task.time_col
     group_col = task.group_col
@@ -73,30 +80,38 @@ def build_reduction_features(
     y = pd.to_numeric(out[target], errors="coerce")
     grouper = out[group_col] if group_col and group_col in out.columns else pd.Series(0, index=out.index)
     grouped = y.groupby(grouper)
-    base = grouped.shift(horizon)  # h-adım güvenli taban
-    new_cols: list[str] = []
-
-    # --- lag'ler: horizon + {0,1,2,3} ---
-    for k in _LAG_MULTIPLES:
-        col = f"{target}_lag_{horizon + k}"
-        out[col] = grouped.shift(horizon + k)
-        new_cols.append(col)
-
-    # --- mevsim-hizalı lag'ler: H = ceil(h/s)·s ---
     s = max(int(season), 1)
     seasonal = s >= 2 and s <= 400
+
+    recursive = strategy == "recursive"
+    base_shift = 1 if recursive else horizon
+    if recursive:
+        k_max = max_lag or max(horizon, 3 * s if seasonal else horizon, 12)
+        lag_list = list(range(1, k_max + 1))
+    else:
+        lag_list = [horizon + k for k in _LAG_MULTIPLES]
+    base = grouped.shift(base_shift)
+    new_cols: list[str] = []
+
+    for lag in lag_list:
+        col = f"{target}_lag_{lag}"
+        out[col] = grouped.shift(lag)
+        new_cols.append(col)
+
+    # --- mevsim-hizalı lag'ler ---
+    h_season = int(math.ceil(base_shift / s) * s) if recursive else int(math.ceil(horizon / s) * s)
     if seasonal:
-        h_season = int(math.ceil(horizon / s) * s)
         for k in _SEASONAL_LAG_K:
             lag = h_season + k * s
             col = f"{target}_slag_{lag}"
-            out[col] = grouped.shift(lag)
-            new_cols.append(col)
-        # seasonal target differencing referansı (ADR 0026): y_{t-s} — s ≥ h iken train aktüeli
-        out[f"{target}_sdiff_ref"] = grouped.shift(h_season)
-        new_cols.append(f"{target}_sdiff_ref")
+            if col not in out.columns:
+                out[col] = grouped.shift(lag)
+                new_cols.append(col)
+        if not recursive:  # seasonal target differencing (ADR 0026-A) yalnız direct
+            out[f"{target}_sdiff_ref"] = grouped.shift(h_season)
+            new_cols.append(f"{target}_sdiff_ref")
 
-    # --- rolling (base = shift(horizon)): mean/std/min/max ---
+    # --- rolling (base = shift(base_shift)): mean/std/min/max ---
     windows = (*_ROLL_WINDOWS, s) if seasonal else _ROLL_WINDOWS
     for w in dict.fromkeys(windows):  # tekrarsız
         bg = base.groupby(grouper)
@@ -123,11 +138,11 @@ def build_reduction_features(
         new_cols.append(f"{target}_ewm_{span}")
 
     # --- fark (difference) özellikleri ---
-    out[f"{target}_diff1_lag_{horizon}"] = grouped.shift(horizon) - grouped.shift(horizon + 1)
-    new_cols.append(f"{target}_diff1_lag_{horizon}")
+    out[f"{target}_diff1_lag_{base_shift}"] = grouped.shift(base_shift) - grouped.shift(base_shift + 1)
+    new_cols.append(f"{target}_diff1_lag_{base_shift}")
     if seasonal:
-        out[f"{target}_diffs_lag_{horizon}"] = grouped.shift(horizon) - grouped.shift(horizon + s)
-        new_cols.append(f"{target}_diffs_lag_{horizon}")
+        out[f"{target}_diffs_lag_{base_shift}"] = grouped.shift(base_shift) - grouped.shift(base_shift + s)
+        new_cols.append(f"{target}_diffs_lag_{base_shift}")
 
     # --- zaman-içi konum ---
     out[f"{target}_step_index"] = grouped.cumcount().astype("float64")
@@ -137,9 +152,10 @@ def build_reduction_features(
     if add_calendar:
         new_cols += _calendar_features(out, time_col, target)
 
+    new_cols = list(dict.fromkeys(new_cols))  # tekrarsız (recursive'de lag ↔ slag çakışabilir)
     out[new_cols] = out[new_cols].replace([np.inf, -np.inf], np.nan)
     logger.info(
-        "[reduction] %d özellik (shift≥%d, s=%d%s, leakage-safe).",
-        len(new_cols), horizon, s, ", takvim" if add_calendar else "",
+        "[reduction] %d özellik (%s, shift≥%d, s=%d%s, leakage-safe).",
+        len(new_cols), strategy, base_shift, s, ", takvim" if add_calendar else "",
     )
     return out, new_cols
