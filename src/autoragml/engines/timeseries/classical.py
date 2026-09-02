@@ -20,15 +20,17 @@ from autoragml.contracts.enums import SplitKind, Task
 from autoragml.contracts.run_config import RunConfig
 from autoragml.contracts.task_spec import TaskSpec
 from autoragml.contracts.validation import FoldReport, LeakageReport, ValidationReport
+from autoragml.ensembling.greedy import bagged_greedy_selection, greedy_selection
 from autoragml.logging import get_logger
 from autoragml.models.estimator import resolve_class_path
-from autoragml.scoring.metrics import compute_metrics
+from autoragml.scoring.metrics import compute_metrics, default_primary_metric, lower_is_better
 from autoragml.validators.frame_ops import OOFArrays, prediction_health
 
 logger = get_logger(__name__)
 
 _Arr = npt.NDArray[np.float64]
 CLASSICAL_FAMILIES = {"statistical", "intermittent"}
+CLASSICAL_ENSEMBLE_KEY = "classical_ensemble"
 _SEASON_PARAM = "season_length"
 _FREQ_SEASON: dict[str, int] = {"H": 24, "D": 7, "B": 5, "W": 52, "M": 12, "Q": 4, "Y": 1, "A": 1}
 _N_JOBS = -1  # statsforecast serileri kendi executor'ıyla paralelleştirir (Windows'ta güvenli)
@@ -40,11 +42,18 @@ def is_classical(candidate: Candidate) -> bool:
 
 
 def _season_length(profile: DataProfile, freq: str | None) -> int:
+    """Operasyonel mevsim = freq'in doğal periyodu (günlük→7). Yıllık (365) gibi uzun
+    periyotlar AutoARIMA'yı patlatır ve CV history-guard'ını şişirir → tercih edilmez.
+    Tespit edilen seasonality yalnız freq bilinmiyorsa ve makul (≤ 3× taban) ise kullanılır.
+    """
+    base = _FREQ_SEASON.get(freq[0].upper(), 0) if freq else 0
+    if base:
+        return base
     ts = profile.timeseries
     if ts and ts.seasonality:
-        return max(int(s.period) for s in ts.seasonality)
-    if freq:
-        return _FREQ_SEASON.get(freq[0].upper(), 1)
+        periods = sorted(int(s.period) for s in ts.seasonality if 2 <= int(s.period) <= 60)
+        if periods:
+            return periods[0]
     return 1
 
 
@@ -90,22 +99,112 @@ def _horizon(task: TaskSpec, config: RunConfig) -> int:
     return int(task.horizon or (pol.horizon if pol and pol.horizon else None) or 4)
 
 
+def _report_from_oof(
+    key: str,
+    y_true: _Arr,
+    y_pred: _Arr,
+    win: pd.Series,
+    group: np.ndarray,
+    task: TaskSpec,
+) -> ValidationReport:
+    windows = sorted(pd.unique(win))
+    folds = [
+        FoldReport(
+            fold_id=int(w),
+            n_train=0,
+            n_test=int((win == w).sum()),
+            metrics=compute_metrics(y_true[(win == w).to_numpy()], y_pred[(win == w).to_numpy()], task.task),
+        )
+        for w in windows
+    ]
+    oof_metrics = compute_metrics(y_true, y_pred, task.task)
+    oof_se: dict[str, float] = {}
+    for k in oof_metrics:
+        vals = [fr.metrics[k] for fr in folds if k in fr.metrics and np.isfinite(fr.metrics[k])]
+        if len(vals) >= 2:
+            oof_se[k] = float(np.std(vals, ddof=1) / np.sqrt(len(vals)))
+    return ValidationReport(
+        candidate_key=key,
+        split_kind=SplitKind.ROLLING_ORIGIN,
+        folds=folds,
+        oof_metrics=oof_metrics,
+        oof_metric_se=oof_se,
+        prediction_health=prediction_health(y_true, y_pred),
+        leakage=LeakageReport(),
+        nested=False,
+        oof=OOFArrays(y_true=y_true, y_pred=y_pred, group=group),
+    )
+
+
+def _classical_ensemble(
+    cv: pd.DataFrame,
+    alias_to_cand: dict[str, Candidate],
+    task: TaskSpec,
+    config: RunConfig,
+) -> tuple[ValidationReport, Candidate] | None:
+    """Klasik OOF matrisinde GES → EAT-tarzı ansambl (M3/M4 winner deseni, ADR 0024)."""
+    aliases = [a for a in alias_to_cand if a in cv.columns]
+    if len(aliases) < 2:
+        return None
+    preds = np.column_stack([cv[a].to_numpy(dtype=np.float64) for a in aliases])
+    y_true = cv["y"].to_numpy(dtype=np.float64)
+    primary = config.primary_metric or default_primary_metric(task.task)
+    lower = lower_is_better(primary)
+
+    def metric_fn(yt: np.ndarray, yp: np.ndarray) -> float:
+        return compute_metrics(yt, yp, task.task).get(primary, float("inf"))
+
+    ec = config.ensemble
+    if ec.bagging:
+        w = bagged_greedy_selection(
+            preds, y_true, metric_fn=metric_fn, lower_is_better=lower, max_models=ec.max_models,
+            sorted_init_k=ec.sorted_init_k, n_bags=ec.n_bags, bag_fraction=ec.bag_fraction, seed=config.seed,
+        )
+    else:
+        w = greedy_selection(
+            preds, y_true, metric_fn=metric_fn, lower_is_better=lower,
+            max_models=ec.max_models, sorted_init_k=ec.sorted_init_k,
+        )
+    nz = np.flatnonzero(w > 1e-9)
+    if nz.size < 2:
+        return None
+    weights = (w[nz] / w[nz].sum()).tolist()
+    blend = preds[:, nz] @ (w[nz] / w[nz].sum())
+    report = _report_from_oof(
+        CLASSICAL_ENSEMBLE_KEY, y_true, blend, cv["_win"], cv["unique_id"].to_numpy().astype(object), task
+    )
+    cand = Candidate(
+        key=CLASSICAL_ENSEMBLE_KEY,
+        name="Classical Ensemble (EAT)",
+        family="ensemble",
+        class_path="__classical_ensemble__",
+        modalities=[task.modality],
+        tasks=[task.task],
+        ensemble_members={alias_to_cand[aliases[i]].key: weights[j] for j, i in enumerate(nz)},
+    )
+    logger.info(
+        "[classical] classical_ensemble: %d üye (%s)",
+        nz.size, ", ".join(alias_to_cand[aliases[i]].key for i in nz),
+    )
+    return report, cand
+
+
 def run_classical_reports(
     frame: pd.DataFrame,
     profile: DataProfile,
     task: TaskSpec,
     config: RunConfig,
     candidates: list[Candidate],
-) -> list[ValidationReport]:
-    """Klasik adaylar → `StatsForecast.cross_validation` OOF → `ValidationReport` listesi."""
+) -> tuple[list[ValidationReport], list[Candidate]]:
+    """Klasik adaylar → `cross_validation` OOF → per-model raporlar + `classical_ensemble` (ADR 0023/0024)."""
     classical = [c for c in candidates if is_classical(c)]
     if not classical:
-        return []
+        return [], []
     try:
         from statsforecast import StatsForecast
     except ImportError:  # pragma: no cover
         logger.warning("[classical] statsforecast yok — klasik modeller atlandı")
-        return []
+        return [], []
 
     ndf = _to_nixtla(frame, task)
     freq = _resolve_freq(profile)
@@ -133,9 +232,10 @@ def run_classical_reports(
     cv_df = ndf[ndf["unique_id"].isin(set(keep))].reset_index(drop=True)
     if cv_df["unique_id"].nunique() < 2:
         logger.warning("[classical] CV için yeterli seri yok — klasik modeller atlandı")
-        return []
+        return [], []
 
-    models, alias_to_cand = [], {}
+    models: list[Any] = []
+    alias_to_cand: dict[str, Candidate] = {}
     for cand in classical:
         try:
             model = _build_model(cand, season)
@@ -145,95 +245,74 @@ def run_classical_reports(
         models.append(model)
         alias_to_cand[model.alias] = cand
     if not models:
-        return []
+        return [], []
 
     sf = StatsForecast(models=models, freq=freq, n_jobs=_N_JOBS, fallback_model=_fallback(season))
     try:
         cv = sf.cross_validation(df=cv_df, h=h, n_windows=n_windows, step_size=h)
     except Exception as exc:  # noqa: BLE001
         logger.warning("[classical] cross_validation başarısız: %s", exc)
-        return []
+        return [], []
     cv = cv.reset_index() if "unique_id" not in cv.columns else cv
     # Heterojen tarihli panelde cutoff'lar seriye göre değişir → pencere indeksiyle grupla.
     cv["_win"] = cv.groupby("unique_id")["cutoff"].rank(method="dense").astype(int)
-    windows = sorted(pd.unique(cv["_win"]))
+    y_true = cv["y"].to_numpy(dtype=np.float64)
+    group = cv["unique_id"].to_numpy().astype(object)
 
-    reports: list[ValidationReport] = []
-    for alias, cand in alias_to_cand.items():
-        if alias not in cv.columns:
-            continue
-        y_true = cv["y"].to_numpy(dtype=np.float64)
-        y_pred = cv[alias].to_numpy(dtype=np.float64)
-        folds = [
-            FoldReport(
-                fold_id=int(w),
-                n_train=0,
-                n_test=int((cv["_win"] == w).sum()),
-                metrics=compute_metrics(
-                    cv.loc[cv["_win"] == w, "y"], cv.loc[cv["_win"] == w, alias], task.task
-                ),
-            )
-            for w in windows
-        ]
-        oof_metrics = compute_metrics(y_true, y_pred, task.task)
-        oof_se: dict[str, float] = {}
-        for k in oof_metrics:
-            vals = [fr.metrics[k] for fr in folds if k in fr.metrics and np.isfinite(fr.metrics[k])]
-            if len(vals) >= 2:
-                oof_se[k] = float(np.std(vals, ddof=1) / np.sqrt(len(vals)))
-        reports.append(
-            ValidationReport(
-                candidate_key=cand.key,
-                split_kind=SplitKind.ROLLING_ORIGIN,
-                folds=folds,
-                oof_metrics=oof_metrics,
-                oof_metric_se=oof_se,
-                prediction_health=prediction_health(y_true, y_pred),
-                leakage=LeakageReport(),
-                nested=False,
-                oof=OOFArrays(
-                    y_true=y_true, y_pred=y_pred, group=cv["unique_id"].to_numpy().astype(object)
-                ),
-            )
-        )
+    reports = [
+        _report_from_oof(cand.key, y_true, cv[alias].to_numpy(dtype=np.float64), cv["_win"], group, task)
+        for alias, cand in alias_to_cand.items()
+        if alias in cv.columns
+    ]
+    extra: list[Candidate] = []
+    ens = _classical_ensemble(cv, alias_to_cand, task, config)
+    if ens is not None:
+        ens_report, ens_cand = ens
+        reports.append(ens_report)
+        extra.append(ens_cand)
     logger.info("[classical] %d model doğrulandı (h=%d, %d pencere, s=%d)", len(reports), h, n_windows, season)
-    return reports
+    return reports, extra
 
 
 class FittedClassicalForecaster:
-    """Fitted `StatsForecast` + serving. `Predictor` protokolünü karşılar (ADR 0023)."""
+    """Fitted `StatsForecast` (1..n model) + serving. `Predictor` protokolü (ADR 0023/0024).
 
-    __slots__ = ("_alias", "_group_col", "_h", "_last", "_sf", "_target", "_time_col")
+    Tek model → `aliases=[a], weights=[1.0]`. `classical_ensemble` → çok model + GES ağırlıkları;
+    `predict` = model-başı forecast kolonlarının ağırlıklı ortalaması.
+    """
+
+    __slots__ = ("_aliases", "_group_col", "_h", "_last", "_sf", "_time_col", "_weights")
 
     def __init__(
         self,
         *,
         sf: Any,
-        alias: str,
+        aliases: list[str],
+        weights: list[float],
         horizon: int,
         train_ndf: pd.DataFrame,
         group_col: str | None,
         time_col: str,
-        target: str,
     ) -> None:
         self._sf = sf
-        self._alias = alias
+        self._aliases = aliases
+        self._weights = np.asarray(weights, dtype=np.float64)
         self._h = horizon
         self._group_col = group_col
         self._time_col = time_col
-        self._target = target
         self._last = train_ndf.groupby("unique_id")["y"].last().to_dict()
 
     def predict(self, frame: pd.DataFrame) -> _Arr:
         fc = self._sf.predict(h=self._h).reset_index()
-        fc = fc.rename(columns={self._alias: "_yhat"})[["unique_id", "ds", "_yhat"]]
         fc["ds"] = pd.to_datetime(fc["ds"])
+        blended = np.zeros(len(fc), dtype=np.float64)
+        for alias, w in zip(self._aliases, self._weights, strict=True):
+            blended += w * fc[alias].to_numpy(dtype=np.float64)
+        fc = fc[["unique_id", "ds"]].assign(_yhat=blended)
 
         key = pd.DataFrame(
             {
-                "unique_id": (
-                    frame[self._group_col].astype(str) if self._group_col else "series"
-                ),
+                "unique_id": frame[self._group_col].astype(str) if self._group_col else "series",
                 "ds": pd.to_datetime(frame[self._time_col], errors="coerce"),
             }
         )
@@ -250,28 +329,58 @@ class FittedClassicalForecaster:
         return []
 
 
-def refit_classical(
-    candidate: Candidate,
-    frame: pd.DataFrame,
-    profile: DataProfile,
-    task: TaskSpec,
-    config: RunConfig,
+def _fit_forecaster(
+    models: list[Any], weights: list[float], frame: pd.DataFrame, profile: DataProfile,
+    task: TaskSpec, config: RunConfig,
 ) -> FittedClassicalForecaster:
-    """Klasik şampiyonu tüm train'de fit → `FittedClassicalForecaster`."""
     from statsforecast import StatsForecast
 
     ndf = _to_nixtla(frame, task)
     freq = _resolve_freq(profile)
     season = _season_length(profile, freq)
-    model = _build_model(candidate, season)
-    sf = StatsForecast(models=[model], freq=freq, n_jobs=_N_JOBS, fallback_model=_fallback(season))
+    sf = StatsForecast(models=models, freq=freq, n_jobs=_N_JOBS, fallback_model=_fallback(season))
     sf.fit(df=ndf)
     return FittedClassicalForecaster(
         sf=sf,
-        alias=model.alias,
+        aliases=[m.alias for m in models],
+        weights=weights,
         horizon=_horizon(task, config),
         train_ndf=ndf,
         group_col=task.group_col,
         time_col=task.time_col or "ds",
-        target=task.targets[0],
     )
+
+
+def refit_classical(
+    candidate: Candidate, frame: pd.DataFrame, profile: DataProfile, task: TaskSpec, config: RunConfig
+) -> FittedClassicalForecaster:
+    """Tek klasik şampiyonu tüm train'de fit."""
+    season = _season_length(profile, _resolve_freq(profile))
+    return _fit_forecaster([_build_model(candidate, season)], [1.0], frame, profile, task, config)
+
+
+def refit_classical_ensemble(
+    ens_candidate: Candidate,
+    all_candidates: list[Candidate],
+    frame: pd.DataFrame,
+    profile: DataProfile,
+    task: TaskSpec,
+    config: RunConfig,
+) -> FittedClassicalForecaster:
+    """`classical_ensemble` şampiyonu — üye modelleri tek `StatsForecast`'ta fit + GES ağırlıkları."""
+    members = ens_candidate.ensemble_members or {}
+    by_key = {c.key: c for c in all_candidates}
+    season = _season_length(profile, _resolve_freq(profile))
+    models: list[Any] = []
+    weights: list[float] = []
+    for mkey, w in members.items():
+        cand = by_key.get(mkey)
+        if cand is None:
+            continue
+        models.append(_build_model(cand, season))
+        weights.append(float(w))
+    if len(models) < 2:
+        msg = "classical_ensemble refit: 2'den az üye"
+        raise ValueError(msg)
+    w_arr = np.asarray(weights, dtype=np.float64)
+    return _fit_forecaster(models, (w_arr / w_arr.sum()).tolist(), frame, profile, task, config)

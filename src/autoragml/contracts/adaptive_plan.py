@@ -6,7 +6,7 @@ Deklaratif, serialize edilebilir. Kod taşımaz; **referans** taşır.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import Field
 
@@ -48,3 +48,4 @@ class AdaptivePlan(Contract):
     regimes: list[RegimeDef] = Field(default_factory=list)
     family_policy: dict[str, str] = Field(default_factory=dict)  # family -> op yoğunluğu
     recipes_used: list[str] = Field(default_factory=list)
+    model_hints: dict[str, dict[str, Any]] = Field(default_factory=dict)  # aday/family -> param (ADR 0024)

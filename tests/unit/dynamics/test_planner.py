@@ -130,3 +130,29 @@ def test_unknown_recipe_fails_at_plan_time() -> None:
     df = pd.DataFrame({"y": [1.0, 2.0, 3.0], "x": [4.0, 5.0, 6.0]})
     with pytest.raises(RecipeError):
         _plan(df, dynamics={"recipes": ["not_registered"]})
+
+
+def test_tweedie_hint_for_intermittent_panel() -> None:
+    """ADR 0024: panelin çoğu kesikli talep → GBDT için Tweedie/Poisson ipucu."""
+    weeks = pd.date_range("2022-01-03", periods=120, freq="W-MON")
+    rng = np.random.default_rng(9)
+    rows = [
+        {"g": f"s{i}", "ds": wk, "y": float(rng.integers(0, 40)) if rng.random() < 0.2 else 0.0}
+        for i in range(8)
+        for wk in weeks
+    ]
+    plan, _, _ = _plan(pd.DataFrame(rows), time_col="ds", group_col="g", split_policy={"horizon": 4})
+    assert plan.model_hints.get("lightgbm", {}).get("objective") == "tweedie"
+    assert plan.model_hints.get("hist_gbm", {}).get("loss") == "poisson"
+
+
+def test_no_tweedie_hint_for_smooth_panel() -> None:
+    weeks = pd.date_range("2022-01-03", periods=120, freq="W-MON")
+    rng = np.random.default_rng(10)
+    rows = [
+        {"g": g, "ds": wk, "y": 100 + 20 * np.sin(i / 52 * 6.28) + rng.normal(0, 5)}
+        for g in ["A", "B", "C"]
+        for i, wk in enumerate(weeks)
+    ]
+    plan, _, _ = _plan(pd.DataFrame(rows), time_col="ds", group_col="g", split_policy={"horizon": 4})
+    assert plan.model_hints == {}

@@ -186,6 +186,26 @@ def _row_policies(profile: DataProfile, task: TaskSpec) -> list[str]:
     return policies
 
 
+_IRREGULAR = (IntermittencyClass.INTERMITTENT, IntermittencyClass.LUMPY, IntermittencyClass.ERRATIC)
+
+
+def _model_hints(profile: DataProfile, task: TaskSpec) -> dict[str, dict[str, object]]:
+    """Intermittency ipucundan model param ipuçları (ADR 0024). Yalnız reduction GBDT."""
+    ts = profile.timeseries
+    if task.task is not Task.FORECASTING or ts is None or not ts.intermittency_summary:
+        return {}
+    total = sum(ts.intermittency_summary.values())
+    irregular = sum(ts.intermittency_summary.get(c.value, 0) for c in _IRREGULAR)
+    if total == 0 or irregular / total < 0.5:
+        return {}
+    logger.info("[dynamics] panelin %.0f%%'i düzensiz talep — Tweedie/Poisson ipucu", irregular / total * 100)
+    return {
+        "lightgbm": {"objective": "tweedie", "tweedie_variance_power": 1.3},
+        "xgboost": {"objective": "reg:tweedie", "tweedie_variance_power": 1.3},
+        "hist_gbm": {"loss": "poisson"},
+    }
+
+
 def _regimes(config: RunConfig) -> list[RegimeDef]:
     if "scenario_2" not in config.scenarios:
         return []
@@ -218,4 +238,5 @@ def build_plan(profile: DataProfile, task: TaskSpec, config: RunConfig) -> Adapt
         regimes=regimes,
         family_policy=dict(_FAMILY_POLICY),
         recipes_used=list(cfg.recipes),
+        model_hints=_model_hints(profile, task),
     )

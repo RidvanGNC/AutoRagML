@@ -22,7 +22,7 @@ from autoragml.ensembling import build_weighted_ensemble
 from autoragml.exceptions import EngineError
 from autoragml.fine_tuners import resolve_tuner
 from autoragml.logging import get_logger
-from autoragml.models import resolve_candidates
+from autoragml.models import apply_model_hints, resolve_candidates
 from autoragml.scoring import score_reports
 from autoragml.validators import Tuner, run_validation_suite
 
@@ -56,7 +56,7 @@ def run_core_pipeline(
         logger.info("[engine] %s", msgs[-1])
         degraded = True
 
-    candidates = resolve_candidates(config, task)
+    candidates = apply_model_hints(resolve_candidates(config, task), plan.model_hints)
     reduction_cands = [c for c in candidates if not (run_classical and is_classical(c))]
     classical_cands = [c for c in candidates if run_classical and is_classical(c)]
     logger.info(
@@ -65,7 +65,11 @@ def run_core_pipeline(
 
     reports = run_validation_suite(reduction_cands, frame, plan, profile, task, config, tuner=tuner)
     if classical_cands:
-        reports += run_classical_reports(frame, profile, task, config, classical_cands)
+        cl_reports, cl_extra_cands = run_classical_reports(
+            frame, profile, task, config, classical_cands
+        )
+        reports += cl_reports
+        candidates = [*candidates, *cl_extra_cands]
     if not reports:
         msg = f"{engine_key}: hiçbir aday doğrulanamadı"
         raise EngineError(msg)

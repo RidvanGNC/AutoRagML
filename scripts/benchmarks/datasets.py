@@ -22,7 +22,7 @@ Loader = Callable[[], "tuple[pd.DataFrame, str]"]
 _SUBSAMPLE_CAP = 60_000
 _TS_DATA_DIR = Path(__file__).parent / "_data"
 _M3_MAX_SERIES = 400   # M3 1428 seri → temsili alt-küme (klasik CV maliyeti)
-_M5_MAX_SERIES = 1500  # M5 30k seri → seed'li alt-küme (akışı doğrulamak yeterli)
+_M5_MAX_SERIES = 400   # M5 30k seri → seed'li alt-küme (günlük × ~1900 gün, reduction maliyeti)
 
 
 @dataclass(frozen=True)

@@ -154,12 +154,16 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
   `refit_champion` → `ModelBundle`
 - `timeseries/reduction.py` — **leakage-safe** lag/rolling/ewm özellikleri (`shift ≥ horizon`);
   yeni kolonlar profile'a eklenir; `pre_transform` bundle'a gömülür (predict'te yeniden uygulanır)
-- `timeseries/classical.py` (ADR 0023) — klasik adaylar (`family∈{statistical,intermittent}`)
+- `timeseries/classical.py` (ADR 0023/0024) — klasik adaylar (`family∈{statistical,intermittent}`)
   **Nixtla `StatsForecast` native yolu**: `cross_validation` → OOF (rolling-origin, adaptif
-  pencere + kısa seri filtresi + `SeasonalNaive` fallback) → `ValidationReport`; şampiyon klasik ise
-  `FittedClassicalForecaster` (`sf.fit`/`sf.predict`, `Predictor` protokolü). `run_core_pipeline
-  (run_classical=True)` iki aileyi birleştirir; `RunConfig.classical_forecasting` bayrağı.
-  **v1:** GES ensemble klasiği dışlar (cutoff ≠ fold OOF); reduction pooled
+  pencere + kısa seri filtresi + `SeasonalNaive` fallback) → per-model `ValidationReport` **+
+  `classical_ensemble`** (EAT: aynı OOF matrisinde GES — M3/M4 winner deseni). Şampiyon klasik/EAT ise
+  `FittedClassicalForecaster` (çok-model + ağırlık, `sf.predict` kolonlarının ağırlıklı ortalaması).
+  `run_core_pipeline(run_classical=True)` iki aileyi birleştirir; `RunConfig.classical_forecasting` bayrağı.
+  **v1:** reduction↔klasik ortak GES dışlanır (cutoff ≠ fold OOF); reduction pooled
+- **Tweedie ipucu (ADR 0024):** `planner._model_hints` — panelin ≥%50'si düzensiz talep →
+  `AdaptivePlan.model_hints` (`lightgbm:objective=tweedie`, `hist_gbm:loss=poisson`) →
+  `models.apply_model_hints` reduction GBDT adaylarına merge eder
 - `champion.py` — **k-fold bagged refit (ADR 0022, varsayılan)**: tek model / %100 train yerine
   `bagging.folds` (5) fold-modeli, serving = ortalama (`FittedEnsemblePipeline` eşit ağırlık);
   bagged OOF postprocess'e girer. `k<2` / `bagging.enabled=False` / sınıflandırma → tek model

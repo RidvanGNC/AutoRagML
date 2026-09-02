@@ -8,6 +8,9 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+from autoragml.contracts.candidate import Candidate
 from autoragml.models.estimator import EstimatorBuildError, build_estimator, resolve_class_path
 from autoragml.models.registry import (
     ModelCatalogError,
@@ -19,9 +22,26 @@ from autoragml.models.registry import (
 __all__ = [
     "EstimatorBuildError",
     "ModelCatalogError",
+    "apply_model_hints",
     "build_candidates",
     "build_estimator",
     "load_catalog",
     "resolve_candidates",
     "resolve_class_path",
 ]
+
+
+def apply_model_hints(
+    candidates: list[Candidate], hints: dict[str, dict[str, Any]]
+) -> list[Candidate]:
+    """Plan'ın model ipuçlarını (ör. Tweedie objective) eşleşen adayların default_params'ına merge et (ADR 0024)."""
+    if not hints:
+        return candidates
+    out: list[Candidate] = []
+    for cand in candidates:
+        hint = hints.get(cand.key) or hints.get(cand.family)
+        if hint:
+            out.append(cand.model_copy(update={"default_params": {**cand.default_params, **hint}}))
+        else:
+            out.append(cand)
+    return out

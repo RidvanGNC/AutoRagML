@@ -9,6 +9,20 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 ## [Unreleased]
 
 ### Eklendi
+- **Klasik model ansamblı (EAT) + Tweedie objective** (ADR 0024, SOTA gap analizinden):
+  - `run_classical_reports` per-model raporlara ek olarak **`classical_ensemble`** üretir —
+    aynı `cross_validation` OOF matrisinde GES/bagged-GES (M3 winner Theta, M4 winner forecast-
+    combination; ETS+ARIMA+Theta = EAT). Cutoff-hizalı → GES sorunsuz.
+  - `FittedClassicalForecaster` çok-model + ağırlık: `predict` = model-başı forecast kolonlarının
+    ağırlıklı ortalaması. `refit_classical_ensemble` üyeleri tek `StatsForecast`'ta fit eder.
+  - **Tweedie:** `planner._model_hints` — `intermittency_summary`'de düzensiz pay ≥ %50 →
+    `AdaptivePlan.model_hints` (`lightgbm:tweedie`, `hist_gbm:poisson`, `xgboost:reg:tweedie`).
+    `models.apply_model_hints` reduction GBDT `default_params`'a merge eder. "Magic multipliers"
+    ≈ `postprocess.calibrate="multiplicative"` (zaten var).
+  - `_season_length` düzeltmesi: freq'in doğal periyodu önce (günlük→7); yıllık (365) AutoARIMA'yı
+    patlatıyordu.
+  - Sözleşme: `AdaptivePlan.model_hints`. `run_classical_reports` → `(reports, extra_candidates)`.
+  - `tests/unit/dynamics/test_planner.py` +2 (Tweedie ipucu), `test_classical_forecasting.py` +1.
 - **Native classical forecasting** (ADR 0023): benchmark 2. dalga bulgusu — `m3_monthly` şampiyon
   sMAPE 47 vs seasonal-naive 14 (klasik modeller kataloğda ama reduction pipeline'ından geçemiyordu).
   - `engines/timeseries/classical.py` — `family∈{statistical,intermittent}` adaylar Nixtla

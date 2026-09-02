@@ -28,7 +28,12 @@ from autoragml.contracts.task_spec import TaskSpec
 from autoragml.contracts.validation import ValidationReport
 from autoragml.engines.ensemble_pipeline import FittedEnsemblePipeline
 from autoragml.engines.model_pipeline import FittedModelPipeline, Predictor
-from autoragml.engines.timeseries.classical import is_classical, refit_classical
+from autoragml.engines.timeseries.classical import (
+    CLASSICAL_ENSEMBLE_KEY,
+    is_classical,
+    refit_classical,
+    refit_classical_ensemble,
+)
 from autoragml.ensembling import ENSEMBLE_KEY
 from autoragml.exceptions import EngineError
 from autoragml.logging import get_logger
@@ -282,8 +287,10 @@ def refit_champion(
             tuner, pre_transform,
         )
 
-    if is_classical(candidate):
-        return _classical_bundle(candidate, selection, reports, frame, profile, task, config)
+    if is_classical(candidate) or key == CLASSICAL_ENSEMBLE_KEY:
+        return _classical_bundle(
+            candidate, candidates, selection, reports, frame, profile, task, config
+        )
 
     report = next((r for r in reports if r.candidate_key == key), None)
     fit = _fit_pipeline(
@@ -319,6 +326,7 @@ def refit_champion(
 
 def _classical_bundle(
     candidate: Candidate,
+    candidates: list[Candidate],
     selection: SelectionResult,
     reports: list[ValidationReport],
     frame: pd.DataFrame,
@@ -326,8 +334,13 @@ def _classical_bundle(
     task: TaskSpec,
     config: RunConfig,
 ) -> ModelBundle:
-    """Klasik (StatsForecast) şampiyonu → `ModelBundle` (ADR 0023)."""
-    forecaster = refit_classical(candidate, frame, profile, task, config)
+    """Klasik (StatsForecast) tek model veya EAT ansamblı şampiyonu → `ModelBundle` (ADR 0023/0024)."""
+    if candidate.key == CLASSICAL_ENSEMBLE_KEY:
+        forecaster = refit_classical_ensemble(candidate, candidates, frame, profile, task, config)
+        ensemble_meta: dict[str, object] = {"members": dict(candidate.ensemble_members or {}), "method": "ges"}
+    else:
+        forecaster = refit_classical(candidate, frame, profile, task, config)
+        ensemble_meta = {}
     champ_row = next((r for r in selection.scoreboard.rows if r.model_key == candidate.key), None)
     metadata = BundleMetadata(
         feature_cols=[],
@@ -338,6 +351,7 @@ def _classical_bundle(
         best_iteration=None,
         adaptive_plan_summary={"structure": "per_series_classical"},
         params={"family": candidate.family, "engine": "statsforecast"},
+        ensemble=ensemble_meta,
     )
     return ModelBundle(
         metadata=metadata,
