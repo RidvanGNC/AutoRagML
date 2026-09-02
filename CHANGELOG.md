@@ -8,6 +8,15 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 
 ## [Unreleased]
 
+### Değişti
+- **Guardrail `prediction_negative` serving-clip'e duyarlı** (ADR 0027, m5 benchmark bulgusundan):
+  `postprocess` negatif-olmayan kırpma tabanı (`clip.lower ≥ 0` veya `auto_nonneg` + forecasting/
+  regresyon + `target_min ≥ 0`) uygulayacaksa, küçük negatif OOF tahminleri **artık karantinaya
+  almıyor** (served tahmin garanti `≥ 0`). İstisna: negatif oranı > %50 → miskalibre → yine karantina.
+  OOF metrikleri ham tahminde kalır (ADR 0017 serving-only kilidi korunur). m5'te bu, en iyi
+  tahmincilerin (`classical_ensemble` wMAPE 77.2, `auto_ets` 77.8) yanlış elenmesini düzeltir.
+  `prediction_health` → `n_pred` + `frac_negative` (additive); `evaluate_guardrails(serving_clip_lower=)`.
+
 ### Eklendi
 - **Recursive multi-step reduction** (ADR 0026 Bölüm B, gap analizi Gap #4 — M5/AutoGluon-TS deseni):
   `RunConfig.forecast_reduction: Literal["direct", "recursive"] = "direct"`.

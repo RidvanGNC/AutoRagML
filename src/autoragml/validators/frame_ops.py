@@ -39,11 +39,15 @@ class OOFArrays:
 def prediction_health(y_true: _Arr, y_pred: _Arr) -> dict[str, float]:
     """Tahmin sağlık istatistikleri (ADR 0014 guardrail girdisi)."""
     finite = np.isfinite(y_pred)
+    n_fin = int(finite.sum())
+    n_neg = int((y_pred[finite] < 0).sum())
     pred_abs_max = float(np.max(np.abs(y_pred[finite]))) if finite.any() else 0.0
     true_abs_max = float(np.max(np.abs(y_true[np.isfinite(y_true)]))) if np.isfinite(y_true).any() else 0.0
     return {
         "n_non_finite": float((~finite).sum()),
-        "n_negative": float((y_pred[finite] < 0).sum()),
+        "n_negative": float(n_neg),
+        "n_pred": float(n_fin),
+        "frac_negative": (n_neg / n_fin) if n_fin else 0.0,
         "pred_abs_max": pred_abs_max,
         "true_abs_max": true_abs_max,
         "pred_scale_ratio": pred_abs_max / true_abs_max if true_abs_max > 0 else 0.0,

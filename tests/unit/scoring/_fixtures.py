@@ -19,6 +19,7 @@ def make_report(
     flags_metrics: dict[str, float] | None = None,
     leakage_fail: bool = False,
     n_negative: float = 0.0,
+    frac_negative: float = 0.0,
     best_iteration: int | None = 200,
 ) -> ValidationReport:
     rng = np.random.default_rng(hash(key) % 2**32)
@@ -41,7 +42,8 @@ def make_report(
         folds=folds,
         oof_metrics=metrics,
         oof_metric_se={"smape": se, "rmse": se / 2},
-        prediction_health={"n_negative": n_negative, "n_non_finite": 0.0, "pred_abs_max": 120.0,
+        prediction_health={"n_negative": n_negative, "frac_negative": frac_negative,
+                           "n_non_finite": 0.0, "pred_abs_max": 120.0,
                            "true_abs_max": 100.0, "pred_scale_ratio": 1.2},
         leakage=LeakageReport(status="FAIL" if leakage_fail else "PASS"),
         realized_seconds=1.0,

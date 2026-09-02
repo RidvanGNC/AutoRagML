@@ -122,7 +122,9 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
 - `metrics/` — sMAPE/MAPE/WMAPE/RMSE/MAE/bias/CSL + accuracy/f1_macro/balanced_accuracy
 - `guardrails.py` — quarantine: non-finite metrik · `prediction_health` (negatif/aşırı/
   scale-ratio; negatif yalnız `target_min≥0`) · metrik tavanları · model×scenario blocklist ·
-  leakage FAIL
+  leakage FAIL. **ADR 0027:** serving'de `auto_nonneg` kırpma uygulanacaksa küçük negatif
+  tahminler karantina yapmaz (`serving_clip_lower` — `postprocessors.steps.resolve_clip_lower`
+  yeniden kullanımı); negatif oranı > %50 ise yine karantina (miskalibre).
 - `selection.py` — **1-SE kuralı** (default): birincil metrikte en iyinin `noise_floor`
   bandındaki en **basit/ucuz** aday (`_FAMILY_COMPLEXITY`). `best` = sadece en iyi metrik.
   `class_weighted_score` v1'de **bilgilendirme** (per-class SE yok → seçime girmez, v1.1).

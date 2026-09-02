@@ -16,14 +16,23 @@ from autoragml.scoring.metrics import default_primary_metric
 _METRIC_CEILINGS = (("smape", "smape_mean_max"), ("rmse", "rmse_mean_max"), ("wmape", "wmape_mean_max"))
 
 
+_NEG_FRAC_HARD = 0.5  # bu oranın üstünde negatif → kırpma aktif olsa bile karantina (ADR 0027)
+
+
 def evaluate_guardrails(
     report: ValidationReport,
     config: RunConfig,
     task: TaskSpec,
     *,
     target_min: float | None,
+    serving_clip_lower: float | None = None,
 ) -> list[str]:
-    """Bir aday için quarantine bayraklarını döndür."""
+    """Bir aday için quarantine bayraklarını döndür.
+
+    `serving_clip_lower` (ADR 0027): serving'de uygulanacak negatif-olmayan kırpma tabanı.
+    `≥ 0` ise `prediction_negative` bayrağı emit edilmez (served tahmin garanti ≥ taban) —
+    ancak negatif oranı > %50 ise miskalibre kabul edilip yine karantina.
+    """
     g = config.guardrails
     if not g.enabled:
         return []
@@ -38,7 +47,9 @@ def evaluate_guardrails(
     if ph.get("n_non_finite", 0.0) > 0:
         flags.append(f"prediction_non_finite:{int(ph['n_non_finite'])}")
     if target_min is not None and target_min >= 0 and ph.get("n_negative", 0.0) > 0:
-        flags.append(f"prediction_negative:{int(ph['n_negative'])}")
+        served_floor = serving_clip_lower is not None and serving_clip_lower >= 0.0
+        if not served_floor or ph.get("frac_negative", 0.0) > _NEG_FRAC_HARD:
+            flags.append(f"prediction_negative:{int(ph['n_negative'])}")
     if g.prediction_hard_abs_max is not None and ph.get("pred_abs_max", 0.0) > g.prediction_hard_abs_max:
         flags.append(f"prediction_abs_max>{g.prediction_hard_abs_max:g}")
     if (

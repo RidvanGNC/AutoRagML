@@ -24,6 +24,7 @@ from autoragml.contracts.scoreboard import ScoreBoard, ScoreRow, SelectionResult
 from autoragml.contracts.task_spec import TaskSpec
 from autoragml.contracts.validation import ValidationReport
 from autoragml.logging import get_logger
+from autoragml.postprocessors.steps import resolve_clip_lower
 from autoragml.scoring.comparison_tests import build_comparison_tests
 from autoragml.scoring.guardrails import evaluate_guardrails
 from autoragml.scoring.metrics import default_primary_metric, lower_is_better
@@ -34,6 +35,25 @@ logger = get_logger(__name__)
 __all__ = ["build_scoreboard", "score_reports"]
 
 _INF = float("inf")
+_REGRESSION_TASKS = {
+    Task.REGRESSION,
+    Task.FORECASTING,
+    Task.QUANTILE_REGRESSION,
+    Task.ORDINAL_REGRESSION,
+}
+
+
+def _serving_clip_lower(config: RunConfig, task: TaskSpec, target_min: float | None) -> float | None:
+    """Serving'de uygulanacak negatif-olmayan kırpma tabanı (ADR 0027)."""
+    pp = config.postprocess
+    if not pp.enabled:
+        return None
+    return resolve_clip_lower(
+        pp.clip.lower,
+        auto_nonneg=pp.clip.auto_nonneg,
+        is_regression=task.task in _REGRESSION_TASKS,
+        target_min=target_min,
+    )
 
 
 def _best_fold_iteration(report: ValidationReport) -> int | None:
@@ -60,10 +80,13 @@ def build_scoreboard(
     lower = lower_is_better(primary)
     family_by_key = {c.key: c.family for c in candidates}
     target_min = profile.target_profile.stats.min
+    serving_clip_lower = _serving_clip_lower(config, task, target_min)
 
     rows: list[ScoreRow] = []
     for report in reports:
-        flags = evaluate_guardrails(report, config, task, target_min=target_min)
+        flags = evaluate_guardrails(
+            report, config, task, target_min=target_min, serving_clip_lower=serving_clip_lower
+        )
         metric_value = report.oof_metrics.get(primary)
         rows.append(
             ScoreRow(

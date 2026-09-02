@@ -35,6 +35,23 @@ def test_guardrail_negative_predictions_when_target_nonneg() -> None:
     assert not any("prediction_negative" in f for f in evaluate_guardrails(rep, _cfg(), _TASK, target_min=-10.0))
 
 
+def test_guardrail_negative_skipped_when_serving_clips_nonneg() -> None:
+    """ADR 0027: serving'de 0'a kırpılacak küçük negatifler → karantina yok."""
+    rep = make_report("m", smape=20.0, n_negative=50.0, frac_negative=0.03)
+    flags = evaluate_guardrails(rep, _cfg(), _TASK, target_min=0.0, serving_clip_lower=0.0)
+    assert not any("prediction_negative" in f for f in flags)
+    # kırpma yoksa (postprocess kapalı) yine karantina
+    flags_noclip = evaluate_guardrails(rep, _cfg(), _TASK, target_min=0.0, serving_clip_lower=None)
+    assert any("prediction_negative" in f for f in flags_noclip)
+
+
+def test_guardrail_negative_still_flags_when_mostly_negative() -> None:
+    """ADR 0027: negatif oranı > %50 → kırpma aktif olsa bile miskalibre → karantina."""
+    rep = make_report("m", smape=20.0, n_negative=600.0, frac_negative=0.6)
+    flags = evaluate_guardrails(rep, _cfg(), _TASK, target_min=0.0, serving_clip_lower=0.0)
+    assert any("prediction_negative" in f for f in flags)
+
+
 def test_guardrail_metric_ceiling_and_blocklist() -> None:
     rep = make_report("m", smape=95.0)
     cfg = _cfg(guardrails={"smape_mean_max": 50.0, "model_scenario_blocklist": {"scenario_1": ["m"]}})

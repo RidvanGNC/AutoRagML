@@ -51,14 +51,18 @@ def _error_outcome(name: str, task_hint: str, exc: BaseException, runtime_s: flo
     )
 
 
-def run_one(ds: BenchmarkDataset, *, hpo: str, out_dir: Path) -> Outcome:
+def run_one(
+    ds: BenchmarkDataset, *, hpo: str, out_dir: Path, forecast_reduction: str = "direct"
+) -> Outcome:
     from autoragml import AutoRagML
 
     print(f"\n=== {ds.name} ({ds.task_hint}) — {ds.notes}")
     t0 = time.perf_counter()
     if ds.is_timeseries:
         try:
-            return run_forecasting(ds, hpo, str(out_dir))
+            return run_forecasting(
+                ds, hpo, str(out_dir), forecast_reduction=forecast_reduction
+            )
         except Exception as exc:  # noqa: BLE001
             traceback.print_exc()
             return _error_outcome(ds.name, ds.task_hint, exc, time.perf_counter() - t0)
@@ -145,6 +149,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="benchmarks.run")
     parser.add_argument("--only", action="append", help="Sadece bu dataset(ler)")
     parser.add_argument("--hpo", default="light", choices=["none", "light", "thorough"])
+    parser.add_argument(
+        "--forecast-reduction", default="direct", choices=["direct", "recursive"],
+        help="Forecasting reduction stratejisi (ADR 0026)",
+    )
     parser.add_argument("--list", action="store_true", help="Kayıtlı setleri listele ve çık")
     parser.add_argument(
         "--download", action="store_true",
@@ -162,7 +170,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.download:
         return _prefetch(selected)
     run_dir = _RUNS_DIR / datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    outcomes = [run_one(d, hpo=args.hpo, out_dir=run_dir / "outputs") for d in selected]
+    outcomes = [
+        run_one(
+            d, hpo=args.hpo, out_dir=run_dir / "outputs",
+            forecast_reduction=args.forecast_reduction,
+        )
+        for d in selected
+    ]
     _write_summary(outcomes, run_dir)
     return 0 if all(o.status in {"success", "no_improvement"} for o in outcomes) else 1
 

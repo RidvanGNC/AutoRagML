@@ -57,7 +57,9 @@ def _seasonal_naive(
     return out
 
 
-def run_forecasting(ds: BenchmarkDataset, hpo: str, out_dir: str) -> Outcome:
+def run_forecasting(
+    ds: BenchmarkDataset, hpo: str, out_dir: str, *, forecast_reduction: str = "direct"
+) -> Outcome:
     """Panel forecasting: son-horizon holdout + seasonal-naive karşılaştırması."""
     from autoragml import AutoRagML
 
@@ -67,12 +69,14 @@ def run_forecasting(ds: BenchmarkDataset, hpo: str, out_dir: str) -> Outcome:
     n_series = eval_df[ds.group_col].nunique()
     print(
         f"    {n_series} seri · {len(train_df)} train / {int(hold_mask.sum())} holdout satırı · "
-        f"h={ds.horizon} · s={ds.season_length}"
+        f"h={ds.horizon} · s={ds.season_length} · reduction={forecast_reduction}"
     )
 
     overrides: dict[str, object] = {"split_policy": {"horizon": ds.horizon}}
     if ds.primary_metric:
         overrides["primary_metric"] = ds.primary_metric
+    if forecast_reduction != "direct":
+        overrides["forecast_reduction"] = forecast_reduction
     model = AutoRagML(hpo_level=hpo, output_dir=out_dir, project_name=ds.name)
     result = model.fit(
         train_df, target=target, time_col=ds.time_col, group_col=ds.group_col, **overrides
