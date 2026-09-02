@@ -156,3 +156,19 @@ def test_no_tweedie_hint_for_smooth_panel() -> None:
     ]
     plan, _, _ = _plan(pd.DataFrame(rows), time_col="ds", group_col="g", split_policy={"horizon": 4})
     assert plan.model_hints == {}
+
+
+def test_seasonal_difference_default_for_trending_seasonal_panel() -> None:
+    """ADR 0026: forecasting + mevsim ≥ horizon + trend/mevsim gücü → seasonal_difference varsayılan."""
+    months = pd.date_range("2016-01-01", periods=84, freq="MS")
+    rng = np.random.default_rng(11)
+    rows = [
+        {"g": g, "ds": m, "y": 100 + gi * 20 + i * 1.5 + 25 * np.sin(i / 12 * 6.28) + rng.normal(0, 3)}
+        for gi, g in enumerate(["A", "B", "C"])
+        for i, m in enumerate(months)
+    ]
+    plan, _, _ = _plan(pd.DataFrame(rows), time_col="ds", group_col="g", split_policy={"horizon": 6})
+    tgt = next((g for g in plan.candidate_ops if g.group_name == "target"), None)
+    assert tgt is not None
+    assert "seasonal_difference" in tgt.choices
+    assert tgt.default == "seasonal_difference"

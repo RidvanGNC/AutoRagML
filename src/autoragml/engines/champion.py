@@ -45,6 +45,8 @@ from autoragml.validators.frame_ops import (
     column_roles,
     fit_estimator,
     reserved_columns,
+    sdiff_ref,
+    sdiff_ref_col,
     split_xy,
     target_transform_choice,
 )
@@ -108,20 +110,30 @@ def _fit_one(
 ) -> tuple[FittedModelPipeline, int | None]:
     """Bir aday + sabit config → `train_df` üzerinde tek `FittedModelPipeline`."""
     reserved = reserved_columns(task)
+    target = task.targets[0]
     pipe = FeaturePipeline.from_plan(plan, choices)
     fitted_pipe, frame_t = pipe.fit_transform(train_df, ctx)
-    x, y = split_xy(frame_t, reserved, task.targets[0])
-    tt = TargetTransform(target_transform_choice(plan, choices)).fit(y)
+    x, y = split_xy(frame_t, reserved, target)
+
+    choice = target_transform_choice(plan, choices)
+    ref = sdiff_ref(frame_t, target, choice)
+    if choice == "seasonal_difference" and ref is None:
+        choice = "none"
+    if ref is not None:  # seasonal_difference: ref NaN warmup at
+        keep = ~np.isnan(ref)
+        x, y, ref = x[keep], y[keep], ref[keep]
+    tt = TargetTransform(choice).fit(y)
+    y_fwd = tt.forward(y, ref=ref)
 
     run_params = dict(params)
     if fixed_iter and candidate.fidelity:
         run_params[candidate.fidelity] = fixed_iter
     estimator = build_estimator(candidate, task.task, run_params)
     if fixed_iter and candidate.fidelity:
-        estimator.fit(x, tt.forward(y))
+        estimator.fit(x, y_fwd)
         best_iter: int | None = fixed_iter
     else:
-        best_iter = fit_estimator(estimator, candidate, x, tt.forward(y), config, task)
+        best_iter = fit_estimator(estimator, candidate, x, y_fwd, config, task)
 
     pipeline = FittedModelPipeline(
         feature_pipeline=fitted_pipe,
@@ -129,6 +141,7 @@ def _fit_one(
         target_transform=tt,
         feature_cols=list(x.columns),
         reserved=reserved,
+        target_ref_col=sdiff_ref_col(target) if choice == "seasonal_difference" else None,
         pre_transform=pre_transform,
         postprocessor=postprocessor,
     )

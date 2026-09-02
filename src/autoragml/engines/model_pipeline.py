@@ -40,6 +40,7 @@ class FittedModelPipeline:
         "_postprocessor",
         "_pre_transform",
         "_reserved",
+        "_target_ref_col",
         "_target_transform",
     )
 
@@ -53,6 +54,7 @@ class FittedModelPipeline:
         reserved: set[str],
         pre_transform: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
         postprocessor: FittedPostprocessor | None = None,
+        target_ref_col: str | None = None,
     ) -> None:
         self._feature_pipeline = feature_pipeline
         self._estimator = estimator
@@ -61,6 +63,7 @@ class FittedModelPipeline:
         self._reserved = reserved
         self._pre_transform = pre_transform
         self._postprocessor = postprocessor
+        self._target_ref_col = target_ref_col  # seasonal_difference ref kolonu (ADR 0026)
 
     def predict(self, frame: pd.DataFrame) -> _Arr:
         """Ham feature frame'inden nokta tahmini.
@@ -75,7 +78,10 @@ class FittedModelPipeline:
         x = x.reindex(columns=self._feature_cols, fill_value=0.0)
         x = x.apply(pd.to_numeric, errors="coerce").fillna(0.0)
         raw = np.asarray(self._estimator.predict(x), dtype=np.float64)
-        out = self._target_transform.inverse(raw)
+        ref = None
+        if self._target_ref_col is not None and self._target_ref_col in transformed.columns:
+            ref = pd.to_numeric(transformed[self._target_ref_col], errors="coerce").to_numpy(dtype=np.float64)
+        out = self._target_transform.inverse(raw, ref=ref)
         if self._postprocessor is not None:
             out = self._postprocessor.apply(out)
         return out

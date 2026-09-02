@@ -133,21 +133,40 @@ def _candidate_ops(profile: DataProfile, task: TaskSpec, cfg: DynamicsConfig) ->
 
     if task.task in {Task.REGRESSION, Task.FORECASTING, Task.QUANTILE_REGRESSION}:
         tp = profile.target_profile
+        choices: list[str] = []
+        default = "none"
         if ColumnFlag.SKEWED in tp.flags or ColumnFlag.HEAVY_TAILED in tp.flags:
             positive = tp.stats.min is not None and tp.stats.min >= 0.0
-            choices = list(cfg.target_transform_choices)
-            if not positive:
-                choices = [c for c in choices if c != "log1p"]
+            choices = [c for c in cfg.target_transform_choices if positive or c != "log1p"]
+        # seasonal differencing (ADR 0026): forecasting + mevsim ≥ horizon + trend/mevsim gücü
+        if _seasonal_diff_applicable(profile, task):
+            choices = [*dict.fromkeys([*choices, "none", "seasonal_difference"])]
+            default = "seasonal_difference"
+        if choices:
             groups.append(
                 CandidateOpGroup(
                     group_name="target",
                     columns=list(task.targets),
                     choices=choices or ["none"],
-                    default="none",
+                    default=default,
                 )
             )
 
     return groups
+
+
+def _seasonal_diff_applicable(profile: DataProfile, task: TaskSpec) -> bool:
+    """seasonal_difference tersine çevrilebilir mi + faydalı mı (ADR 0026)."""
+    ts = profile.timeseries
+    if task.task is not Task.FORECASTING or ts is None or not ts.seasonality:
+        return False
+    horizon = task.horizon or 1
+    seasons = [s for s in ts.seasonality if 2 <= int(s.period) <= 400 and int(s.period) >= horizon]
+    if not seasons:
+        return False
+    strong = any(s.strength >= 0.3 for s in seasons)
+    trend = (ts.trend_strength or 0.0) >= 0.3
+    return strong or trend
 
 
 def _resolve_structure(

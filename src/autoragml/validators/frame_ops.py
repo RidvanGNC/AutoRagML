@@ -79,6 +79,19 @@ def target_transform_choice(plan: AdaptivePlan, candidate_choices: dict[str, str
     return "none"
 
 
+def sdiff_ref_col(target: str) -> str:
+    """seasonal_difference referans kolonu (reduction üretir — ADR 0026)."""
+    return f"{target}_sdiff_ref"
+
+
+def sdiff_ref(frame: pd.DataFrame, target: str, choice: str) -> _Arr | None:
+    """`choice == "seasonal_difference"` ise `{target}_sdiff_ref` dizisi, değilse `None`."""
+    col = sdiff_ref_col(target)
+    if choice != "seasonal_difference" or col not in frame.columns:
+        return None
+    return np.asarray(pd.to_numeric(frame[col], errors="coerce"), dtype=np.float64)
+
+
 def inner_holdout_split(
     n: int, frac: float, *, time_ordered: bool, seed: int = 0
 ) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]:

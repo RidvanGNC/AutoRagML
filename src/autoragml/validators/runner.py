@@ -32,6 +32,7 @@ from autoragml.validators.frame_ops import (
     fit_estimator,
     prediction_health,
     reserved_columns,
+    sdiff_ref,
     split_xy,
     target_transform_choice,
 )
@@ -142,11 +143,22 @@ def run_validation(
         x_test, y_test = split_xy(test_t, reserved, target)
         x_test = x_test.reindex(columns=x_train.columns, fill_value=0.0)
 
-        tt = TargetTransform(target_transform_choice(plan, outcome.candidate_choices)).fit(y_train)
-        est = build_estimator(candidate, task.task, outcome.best_params)
-        best_iter = fit_estimator(est, candidate, x_train, tt.forward(y_train), config, task)
+        choice = target_transform_choice(plan, outcome.candidate_choices)
+        ref_train = sdiff_ref(train_t, target, choice)
+        ref_test = sdiff_ref(test_t, target, choice)
+        if choice == "seasonal_difference" and ref_train is None:
+            choice = "none"  # reduction sdiff_ref üretmedi (season < 2) → geri düş
+        if ref_train is not None:  # seasonal_difference: ref NaN warmup satırlarını at
+            keep = ~np.isnan(ref_train)
+            x_train, y_train, ref_train = x_train[keep], y_train[keep], ref_train[keep]
 
-        y_pred = tt.inverse(np.asarray(est.predict(x_test), dtype=np.float64))
+        tt = TargetTransform(choice).fit(y_train)
+        est = build_estimator(candidate, task.task, outcome.best_params)
+        best_iter = fit_estimator(
+            est, candidate, x_train, tt.forward(y_train, ref=ref_train), config, task
+        )
+
+        y_pred = tt.inverse(np.asarray(est.predict(x_test), dtype=np.float64), ref=ref_test)
         metrics = compute_metrics(y_test, y_pred, task.task)
 
         fold_reports.append(

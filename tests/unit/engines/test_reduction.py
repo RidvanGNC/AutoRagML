@@ -73,6 +73,17 @@ def test_reduction_group_isolation() -> None:
     assert b["y_lag_4"].iloc[10] == 12.0  # B: y=2*step → y(6)=12
 
 
+def test_reduction_sdiff_ref_leakage_safe() -> None:
+    """ADR 0026: `y_sdiff_ref` = shift(H≥horizon) — horizon satırında train aktüeli."""
+    out, cols = build_reduction_features(_panel(120), _TASK, horizon=4, season=12)
+    assert "y_sdiff_ref" in cols
+    a = out[out["g"] == "A"].sort_values("ds").reset_index(drop=True)  # y = step index
+    for t in range(20, 100):
+        v = a["y_sdiff_ref"].iloc[t]
+        if not np.isnan(v):
+            assert v <= t - 4 + 1e-9  # y(t-12) ≤ y(t-4)
+
+
 def test_reduction_noop_without_time_col() -> None:
     task = TaskSpec(task=Task.REGRESSION, modality=Modality.TABULAR, targets=["y"])
     df = pd.DataFrame({"y": [1.0, 2.0], "x": [3.0, 4.0]})

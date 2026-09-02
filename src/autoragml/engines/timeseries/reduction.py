@@ -92,6 +92,9 @@ def build_reduction_features(
             col = f"{target}_slag_{lag}"
             out[col] = grouped.shift(lag)
             new_cols.append(col)
+        # seasonal target differencing referansı (ADR 0026): y_{t-s} — s ≥ h iken train aktüeli
+        out[f"{target}_sdiff_ref"] = grouped.shift(h_season)
+        new_cols.append(f"{target}_sdiff_ref")
 
     # --- rolling (base = shift(horizon)): mean/std/min/max ---
     windows = (*_ROLL_WINDOWS, s) if seasonal else _ROLL_WINDOWS

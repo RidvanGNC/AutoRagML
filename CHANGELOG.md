@@ -9,6 +9,11 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 ## [Unreleased]
 
 ### Eklendi
+- **Seasonal target differencing** (ADR 0026 Bölüm A): `candidate_ops` `target` grubuna
+  `seasonal_difference` seçeneği — forecasting + mevsim ≥ horizon + trend/mevsim gücü → **varsayılan**.
+  Eğitim hedefi `y_t − y_{t−s}` (leakage-safe: `s ≥ h` iken `y_{t−s}` train aktüeli); tersine çevirme
+  `pred + {target}_sdiff_ref`. `TargetTransform.forward/inverse` opsiyonel `ref` arg;
+  `FittedModelPipeline.target_ref_col` slotu; `runner`/`champion` warmup (ref=NaN) satırlarını atar.
 - **Zengin reduction özellikleri** (ADR 0025 — MLForecast paritesi, gap analizi Gap #2):
   `build_reduction_features` ~15 → ~40 özellik, tümü leakage-safe (`shift ≥ horizon` veya takvim):
   - **takvim/tarih:** `month`/`quarter`/`dayofweek`/`dayofyear`/`weekofyear` + `is_month_start/end` +
