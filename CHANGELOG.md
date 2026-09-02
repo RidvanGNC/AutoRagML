@@ -9,6 +9,16 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 ## [Unreleased]
 
 ### Eklendi
+- **Zengin reduction özellikleri** (ADR 0025 — MLForecast paritesi, gap analizi Gap #2):
+  `build_reduction_features` ~15 → ~40 özellik, tümü leakage-safe (`shift ≥ horizon` veya takvim):
+  - **takvim/tarih:** `month`/`quarter`/`dayofweek`/`dayofyear`/`weekofyear` + `is_month_start/end` +
+    döngüsel `sin/cos(month)`, `sin/cos(dayofweek)` (gelecek tarihler için bilinir → sızıntı yok)
+  - **mevsim-hizalı lag** `y_slag_{H+k·s}` (`H = ceil(h/s)·s`) + **mevsimsel rolling** (aynı-mevsim ort/std)
+  - rolling'e **min/max** + pencereye `season` eklendi
+  - **fark özellikleri:** `y_diff1_lag_h` (`shift(h)−shift(h+1)`), `y_diffs_lag_h` (`shift(h)−shift(h+s)`)
+  - `season` `TimeSeriesCoreEngine`'den `_season_length(profile)` ile geçer; `pre_transform` taşır
+  - gerçek (seasonal) target differencing transform + recursive multi-step → v1.1/ADR 0026
+  - `tests/unit/engines/test_reduction.py` — 6 test (tüm özellikler leakage-safe, takvim warmup'sız).
 - **Klasik model ansamblı (EAT) + Tweedie objective** (ADR 0024, SOTA gap analizinden):
   - `run_classical_reports` per-model raporlara ek olarak **`classical_ensemble`** üretir —
     aynı `cross_validation` OOF matrisinde GES/bagged-GES (M3 winner Theta, M4 winner forecast-

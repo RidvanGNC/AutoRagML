@@ -1,4 +1,4 @@
-"""engines.timeseries.reduction — leakage-safe lag/rolling özellikleri (ADR 0004)."""
+"""engines.timeseries.reduction — zengin leakage-safe özellikler (ADR 0004 + 0025)."""
 
 from __future__ import annotations
 
@@ -14,13 +14,13 @@ _TASK = TaskSpec(
 )
 
 
-def _panel() -> pd.DataFrame:
-    weeks = pd.date_range("2024-01-01", periods=60, freq="W-MON")
+def _panel(n: int = 60) -> pd.DataFrame:
+    weeks = pd.date_range("2024-01-01", periods=n, freq="W-MON")
     return pd.DataFrame(
         {
-            "g": np.repeat(["A", "B"], 60),
+            "g": np.repeat(["A", "B"], n),
             "ds": np.tile(weeks, 2),
-            "y": np.concatenate([np.arange(60.0), np.arange(60.0) * 2]),
+            "y": np.concatenate([np.arange(float(n)), np.arange(float(n)) * 2]),
         }
     )
 
@@ -28,28 +28,49 @@ def _panel() -> pd.DataFrame:
 def test_reduction_adds_shifted_features() -> None:
     out, cols = build_reduction_features(_panel(), _TASK, horizon=4)
     assert "y_lag_4" in cols and "y_rollmean_4" in cols and "y_ewm_4" in cols
-    # A grubu, y = step index. lag_4 satır t → y(t-4) = t-4 (t>=4).
     a = out[out["g"] == "A"].sort_values("ds").reset_index(drop=True)
-    assert np.isnan(a["y_lag_4"].iloc[0])  # ilk 4 satır warmup
-    assert a["y_lag_4"].iloc[10] == 6.0  # y(6) = 6
+    assert np.isnan(a["y_lag_4"].iloc[0])
+    assert a["y_lag_4"].iloc[10] == 6.0
 
 
-def test_reduction_leakage_safe_min_shift() -> None:
-    out, _ = build_reduction_features(_panel(), _TASK, horizon=4)
-    a = out[out["g"] == "A"].sort_values("ds").reset_index(drop=True)
-    # her lag kolonu en az horizon kaydırılmış: satır t'de lag <= y(t-4)
-    for t in range(10, 40):
-        for col in [c for c in out.columns if c.startswith("y_lag_")]:
+def test_reduction_all_target_features_leakage_safe() -> None:
+    """ADR 0025: her hedef-türevi kolon (lag/slag/roll/ewm/diff/seasonal) `shift ≥ horizon`."""
+    out, cols = build_reduction_features(_panel(120), _TASK, horizon=4, season=12)
+    a = out[out["g"] == "A"].sort_values("ds").reset_index(drop=True)  # y = step index
+    derived = [
+        c for c in cols
+        if not c.startswith("y_cal_") and c not in {"y_step_index"}
+    ]
+    assert {"y_slag_12", "y_seasonal_rollmean", "y_diff1_lag_4"} <= set(cols)
+    for t in range(30, 100):
+        for col in derived:
             val = a[col].iloc[t]
-            if not np.isnan(val):
-                assert val <= t - 4 + 1e-9  # y(t-4) veya daha eski
+            if np.isnan(val):
+                continue
+            # y(τ) = τ; rolling/diff τ-değerlerinin kombinasyonu ama hepsi ≤ y(t-4) = t-4
+            assert val <= t - 4 + 1e-6, f"{col}@{t} = {val} > {t - 4}"
+
+
+def test_reduction_calendar_features_no_shift() -> None:
+    out, cols = build_reduction_features(_panel(), _TASK, horizon=4)
+    cal = [c for c in cols if c.startswith("y_cal_")]
+    assert {"y_cal_month", "y_cal_dayofweek", "y_cal_month_sin", "y_cal_dow_cos"} <= set(cal)
+    assert not out[cal].isna().any().any()  # takvim ilk satırda bile dolu (warmup yok)
+    assert out["y_cal_month_sin"].abs().max() <= 1.0
+
+
+def test_reduction_seasonal_features_only_when_season_ge_2() -> None:
+    _, no_season = build_reduction_features(_panel(), _TASK, horizon=4, season=1)
+    _, with_season = build_reduction_features(_panel(120), _TASK, horizon=4, season=12)
+    assert not any(c.startswith("y_slag_") for c in no_season)
+    assert any(c.startswith("y_slag_") for c in with_season)
+    assert "y_diffs_lag_4" in with_season and "y_diffs_lag_4" not in no_season
 
 
 def test_reduction_group_isolation() -> None:
     out, _ = build_reduction_features(_panel(), _TASK, horizon=4)
     b = out[out["g"] == "B"].sort_values("ds").reset_index(drop=True)
-    # B: y = 2*step. lag_4 satır 10 → y(6) = 12 (A'nın 6 değil)
-    assert b["y_lag_4"].iloc[10] == 12.0
+    assert b["y_lag_4"].iloc[10] == 12.0  # B: y=2*step → y(6)=12
 
 
 def test_reduction_noop_without_time_col() -> None:

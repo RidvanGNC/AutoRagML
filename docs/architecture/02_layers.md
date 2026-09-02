@@ -152,8 +152,12 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
 - `core.run_core_pipeline` (ortak): `build_plan` → `resolve_candidates` →
   `run_validation_suite(tuner=resolve_tuner(config))` → `build_weighted_ensemble` → `score_reports` →
   `refit_champion` → `ModelBundle`
-- `timeseries/reduction.py` — **leakage-safe** lag/rolling/ewm özellikleri (`shift ≥ horizon`);
-  yeni kolonlar profile'a eklenir; `pre_transform` bundle'a gömülür (predict'te yeniden uygulanır)
+- `timeseries/reduction.py` (ADR 0004/0025) — **leakage-safe** zengin özellikler (`shift ≥ horizon`):
+  lag + **mevsim-hizalı lag** (`slag`) + rolling mean/std/**min/max** + **mevsimsel rolling** +
+  ewm + **fark** (`diff1`, `diffs`) + **takvim** (month/dow/... + sin/cos döngüsel).
+  `build_reduction_features(frame, task, *, horizon, season, add_calendar)`; `season` engine'den
+  (`_season_length`); yeni kolonlar profile'a; `pre_transform` bundle'a (predict'te yeniden).
+  Gerçek target differencing + recursive multi-step → v1.1/ADR 0026
 - `timeseries/classical.py` (ADR 0023/0024) — klasik adaylar (`family∈{statistical,intermittent}`)
   **Nixtla `StatsForecast` native yolu**: `cross_validation` → OOF (rolling-origin, adaptif
   pencere + kısa seri filtresi + `SeasonalNaive` fallback) → per-model `ValidationReport` **+

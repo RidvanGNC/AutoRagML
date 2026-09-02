@@ -18,6 +18,7 @@ from autoragml.contracts.engine_result import EngineResult
 from autoragml.contracts.run_config import RunConfig
 from autoragml.contracts.task_spec import TaskSpec
 from autoragml.engines.core import run_core_pipeline
+from autoragml.engines.timeseries.classical import _resolve_freq, _season_length
 from autoragml.engines.timeseries.reduction import build_reduction_features
 from autoragml.io import materialize_frame
 from autoragml.logging import get_logger
@@ -26,8 +27,8 @@ from autoragml.validators import Tuner
 logger = get_logger(__name__)
 
 
-def _reduce_only(frame: pd.DataFrame, task: TaskSpec, horizon: int) -> pd.DataFrame:
-    return build_reduction_features(frame, task, horizon=horizon)[0]
+def _reduce_only(frame: pd.DataFrame, task: TaskSpec, horizon: int, season: int) -> pd.DataFrame:
+    return build_reduction_features(frame, task, horizon=horizon, season=season)[0]
 
 
 class TimeSeriesCoreEngine:
@@ -46,8 +47,11 @@ class TimeSeriesCoreEngine:
     ) -> EngineResult:
         frame = materialize_frame(dataset)
         horizon = task.horizon or (config.split_policy.horizon if config.split_policy else None) or 4
+        season = _season_length(profile, _resolve_freq(profile))
 
-        augmented, new_cols = build_reduction_features(frame, task, horizon=int(horizon))
+        augmented, new_cols = build_reduction_features(
+            frame, task, horizon=int(horizon), season=int(season)
+        )
         messages: list[str] = []
         if new_cols:
             extra = build_column_profiles(
@@ -60,7 +64,9 @@ class TimeSeriesCoreEngine:
             messages.append(f"reduction: {len(new_cols)} hedef-türevi özellik (shift≥{int(horizon)}).")
 
         pre_transform = (
-            functools.partial(_reduce_only, task=task, horizon=int(horizon)) if new_cols else None
+            functools.partial(_reduce_only, task=task, horizon=int(horizon), season=int(season))
+            if new_cols
+            else None
         )
         return run_core_pipeline(
             self.key, augmented, profile, task, config,
