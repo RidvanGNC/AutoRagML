@@ -112,6 +112,31 @@ m5: recursive multi-step + per-grup olmadan rich features tek başına yetmiyor 
   `predict` istenen `ds` aralığını kapsayacak kadar ileri tahmin eder. **Nihai holdout
   (orchestrator) zaten doğruydu** (OOF + holdout raporlandı).
 
+### 2d — segmented champion (ADR 0028) + 0027 + 0029 BİRLİKTE, `--hpo none` — **M5 REKABETÇİ**
+
+| dataset | koşum | şampiyon | test wMAPE | seasonal-naive | Δ | nihai holdout | süre |
+|---|---|---|---|---|---|---|---|
+| m5_subset | 2b (pooled, direct) | `tsb` | 105.2 🔴 | 99.6 | −5.6% | 75.9 | 5679s |
+| m5_subset | **2d (segmented)** | **`segmented`** | **83.3** ✅ | 99.6 | **+16.4%** | **74.6** | 3055s |
+
+**İlk kez M5 kesikli-talep benchmark'ı seasonal-naive'i geçti** (+16.4%). Segmentasyon (SBC sınıfı):
+
+| segment | seri | şampiyon | segment OOF wMAPE |
+|---|---|---|---|
+| `smooth+erratic` | 38 | `auto_theta` | **53.6** |
+| `intermittent` | 291 | `weighted_ensemble` | 94.9 |
+| `lumpy` | 71 | `auto_arima` | 86.2 |
+
+- **Segmentasyon ana kazanç:** düzgün hareket eden 38 seri, tek pooled modelde kesikli dinamiğe
+  sürükleniyordu (~80 wMAPE); kendi `auto_theta` şampiyonuyla **53.6**. Yavaş/hızlı hareket eden
+  ürünler ayrı model → M5 winner deseninin (per store/dept havuzlama) genel-amaçlı karşılığı.
+- **Süre segmentle DÜŞTÜ** (5679s → 3055s): her segment daha küçük panelde klasik CV koşuyor.
+- **ADR 0029 doğrulandı:** benchmark test wMAPE 105.2 (fallback) → 83.3 (gerçek forecast, orchestrator
+  holdout 74.6'ya yakın — aradaki fark 28-gün-ileri güçlüğü).
+- Promotion hâlâ `smape_max=35` sabitiyle FAIL (metrik-duyarlı promotion → v1.1); seçim/başarı doğru.
+- **Harness:** `champion_family` "segmented" satırını tanımıyordu → `_combined_scoreboard` sentetik
+  `segmented` satırı ekledi.
+
 ## Sonraki dalgalar
 - **ADR 0028+0029 birlikte:** m5 `--only m5_subset` (SBC segmentasyonu + düzeltilmiş klasik serving) — pending.
 - **3. dalga:** yüksek boyut/seyrek, ordinal, quantile; `--hpo light/thorough` karşılaştırması.

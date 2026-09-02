@@ -56,11 +56,19 @@ sırada birleştir. Bilinmeyen grup → fallback segment. joblib-picklable (alt-
 - Hacim/mevsimsellik ile kümeleme (k-means) → v1.1; v1 yalnız SBC sınıfı.
 - Tabular (forecasting-dışı) segmentasyon — kapsam dışı, yalnız TS.
 
-## Sonuç (implementasyon)
+## Sonuç (implementasyon — UYGULANDI, commit a5e6630)
 
 - `contracts/adaptive_plan.py` `SegmentSpec` + `segments`; `contracts/dynamics_config.py` eşikler.
 - `dynamics/planner.py` `_resolve_segments(profile, task, cfg)`.
-- `engines/segmented.py` `FittedSegmentedPipeline` + `run_segmented(...)`.
-- `engines/timeseries/core_engine.py` segment dalı.
-- `engines/champion.py` `BundleMetadata.segments`.
-- testler + m5 benchmark (`--only m5_subset`, segment beklenen: intermittent/lumpy ayrı).
+- `engines/segmented.py` `FittedSegmentedPipeline` + `run_segmented(...)` + `_combined_scoreboard`
+  (sentetik `segmented` satırı — reporter/benchmark tek şampiyon satırı bekler).
+- `engines/timeseries/core_engine.py` `_run_pooled` çıkarıldı; `plan.segments` → `run_segmented`.
+- Segment→şampiyon haritası `metadata.adaptive_plan_summary["segments"]` (yeni alan gerekmedi).
+
+### Benchmark sonucu (m5_subset, `--hpo none`)
+
+**İlk kez M5 kesikli-talep benchmark'ı seasonal-naive'i geçti: test wMAPE 105.2 → 83.3 (+16.4%)**,
+nihai holdout 75.9 → 74.6, süre 5679s → 3055s. 3 segment: `smooth+erratic`(38)→`auto_theta`
+OOF **53.6**, `intermittent`(291)→`weighted_ensemble` 94.9, `lumpy`(71)→`auto_arima` 86.2.
+Ana kazanç: 38 düzgün seri artık kesikli dinamiğe sürüklenmiyor (pooled ~80 → segment 53.6).
+(0027 guardrail + 0029 klasik serving düzeltmeleriyle birlikte.)

@@ -166,6 +166,10 @@ def test_timeseries_engine_segmented_champion() -> None:
     segs = result.champion.metadata.adaptive_plan_summary["segments"]
     assert len(segs) >= 2
     assert any("segment" in m for m in result.messages)
+    # birleşik scoreboard: sentetik "segmented" satırı + segment-prefiksli satırlar (ADR 0028)
+    keys = {r.model_key for r in result.scoreboard.rows}
+    assert "segmented" in keys
+    assert any("::" in k for k in keys)
     pred = result.champion.pipeline.predict(df)
     assert len(pred) == len(df)
     assert not np.isnan(pred).any()

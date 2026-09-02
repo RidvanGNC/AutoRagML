@@ -35,7 +35,10 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
   `ModelBundle` (`pipeline` = `FittedSegmentedPipeline`, segment→model haritası
   `adaptive_plan_summary`). Sözleşme: `AdaptivePlan.segments` + `SegmentSpec`,
   `DynamicsConfig.segment_min_series`/`segment_max_count` (additive). `engines/segmented.py`.
+  Birleşik scoreboard: sentetik `segmented` satırı (boyut-ağırlıklı metrikler) + `segment::model` satırları.
   **v1 sınırı:** çok-seviyeli hiyerarşi (store/dept) + segment-arası ensemble + k-means kümeleme → v1.1.
+  **Benchmark (m5_subset, `--hpo none`):** ilk kez seasonal-naive'i geçti — test wMAPE 105.2→83.3
+  (**+16.4%**), 3 segment (smooth+erratic/intermittent/lumpy), süre 5679s→3055s.
 - **Recursive multi-step reduction** (ADR 0026 Bölüm B, gap analizi Gap #4 — M5/AutoGluon-TS deseni):
   `RunConfig.forecast_reduction: Literal["direct", "recursive"] = "direct"`.
   - `build_reduction_features(strategy="recursive", max_lag=None)`: `shift(1)` tabanı, lag `1..k_max`

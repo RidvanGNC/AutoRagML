@@ -81,15 +81,26 @@ class FittedSegmentedPipeline:
         return dict(self._members)
 
 
-def _combined_scoreboard(per_seg: dict[str, EngineResult]) -> ScoreBoard:
-    rows: list[ScoreRow] = []
+def _combined_scoreboard(per_seg: dict[str, EngineResult], sizes: dict[str, int]) -> ScoreBoard:
+    first = next(iter(per_seg.values())).scoreboard
+    primary = first.primary_metric
+    # sentetik "segmented" satırı — downstream (reporter/benchmark) tek şampiyon satırı bekler
+    seg_metrics = _weighted_metrics(per_seg, sizes)
+    seg_row = ScoreRow(
+        model_key="segmented",
+        family="segmented",
+        oof_metric_mean=seg_metrics.get(primary, float("inf")),
+        oof_metric_se=0.0,
+        all_metrics_mean={k: v for k, v in seg_metrics.items() if not k.startswith("_")},
+        selection_eligible=True,
+    )
+    rows: list[ScoreRow] = [seg_row]
     for name, er in per_seg.items():
         for row in er.scoreboard.rows:
             rows.append(row.model_copy(update={"model_key": f"{name}::{row.model_key}"}))
-    first = next(iter(per_seg.values())).scoreboard
     return ScoreBoard(
         rows=rows,
-        primary_metric=first.primary_metric,
+        primary_metric=primary,
         noise_floor=float(np.mean([er.scoreboard.noise_floor for er in per_seg.values()])),
         n_candidates=len(rows),
         selection_bias_bound=max(er.scoreboard.selection_bias_bound for er in per_seg.values()),
@@ -193,7 +204,7 @@ def run_segmented(
         pipeline=pipeline,
     )
 
-    scoreboard = _combined_scoreboard(per_seg)
+    scoreboard = _combined_scoreboard(per_seg, sizes)
     promo_passed = all(er.selection.promotion.passed for er in per_seg.values())
     selection = SelectionResult(
         scoreboard=scoreboard,
