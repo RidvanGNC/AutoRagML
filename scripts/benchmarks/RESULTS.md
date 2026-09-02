@@ -20,6 +20,26 @@ Ham koşum çıktıları `_runs/` altında (git-ignored). Bu dosya elle özetlen
 geçiyor; OOF ↔ holdout tutarlı (aşırı-uyum yok). `weighted_ensemble` bu setlerde şampiyon
 olmadı (tek GBM/forest zaten 1-SE bandında en iyi + en basit — beklenen davranış).
 
+## 1b. dalga — `--hpo light` (2026-09-01)
+
+**6/6 SUCCESS ama 4/6'da `none`'dan KÖTÜ**, 10–15× maliyetle:
+credit_g +2.5% · covtype +1.9% iyi; california/bike/adult/bank ~0.5–1% kötü.
+Ensemble california'da şampiyon oldu ama harici test'te genelleşmedi.
+→ **ADR 0022 (k-fold bagging + `light` inner_folds=2) tetiklendi.**
+
+## 1c. dalga — `--hpo none` + **k-fold bagging** (ADR 0022, 2026-09-02)
+
+| dataset | metrik | 1a test | 1c test | 1a holdout | 1c holdout | not |
+|---|---|---|---|---|---|---|
+| california_housing | rmse↓ | 0.4459 | 0.4459 | 0.4575 | **0.4544** | bagged; test ~aynı (LightGBM düşük varyans), **holdout ↓** |
+| bike_sharing | rmse↓ | 42.90 | **42.37** | 41.78 | **41.54** | bagged; **test −1.2%** (gürültülü count regresyonu — varyans azalması) |
+| adult | f1↑ | 0.8194 | 0.8186 | 0.8115 | 0.8123 | sınıflandırma → bag YOK; ~aynı (run varyansı) |
+| credit_g / bank / covtype | — | değişmedi | değişmedi | | | sınıflandırma → bag YOK (v1) |
+
+**Değerlendirme:** bagging gürültülü regresyonda net kazanç (bike_sharing −1.2%),
+california'da holdout iyileşmesi, gerisinde nötr — **regresyon yok**. Süre ~aynı
+(`hpo=none`'da refit küçük pay). Sınıflandırma bagging (proba ortalaması) → v1.1.
+
 ## Bulunan buglar (bu dalga)
 
 1. **`ColumnDropper.fit` yerel closure** → `save_bundle` covtype gibi kolon-düşüren
