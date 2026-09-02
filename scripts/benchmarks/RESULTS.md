@@ -63,22 +63,27 @@ Her seri **son `horizon` dönem** harici holdout; **seasonal-naive** baseline; s
 Kök neden: klasik modeller (auto_arima/ets/theta/croston) kataloğda ama reduction
 pipeline'ından geçemiyor (`'DataFrame' object has no attribute 'dtype'`).
 
-### 2b — native classical (ADR 0023), `--hpo none`
+### 2b — native classical (ADR 0023) + EAT ansambl & Tweedie (ADR 0024), `--hpo none`
 
 | dataset | primary | şampiyon | test | seasonal-naive | Δ | nihai holdout |
 |---|---|---|---|---|---|---|
-| m3_monthly (400 seri) | sMAPE | **auto_ets** (statistical) | 15.97 | 14.80 | −7.9% | 17.4 (ADR 0023 öncesi **63**) |
-| tourism_large (555 seri) | wMAPE | **extra_trees** (forest) | **18.48** | 19.64 | **+5.9% ✅** | 18.27 |
-| m5_subset | wMAPE | _(koşuyor)_ | | | | |
+| m3_monthly (400 seri) | sMAPE | `auto_ets` (statistical) | 15.97 | 14.80 | −7.9% | 17.4 (ADR 0023 öncesi **63**) |
+| tourism_large (555 seri) | wMAPE | `extra_trees` (forest) | **18.48** | 19.64 | **+5.9% ✅** | 18.27 |
+| m5_subset (400 seri, kesikli) | wMAPE | `tsb` (intermittent) | 105.2 | 99.6 | −5.6% 🔴 | 75.9 |
 
-- **m3:** M3 monthly'de seasonal-naive competition-grade (metodların çoğu ~13-15 sMAPE) — auto_ets
-  %8 içinde, reduction-only'nin sMAPE 47/holdout 63'ünden **3.6× iyi**. Klasik yol devrede.
-- **tourism:** **wMAPE ile SUCCESS.** İlk koşum sMAPE'de "başarısız"dı çünkü tourism serilerinde
-  y≈0 → sMAPE patlıyor, croston yanlış şampiyon oluyordu. `primary_metric=wmape` (demand-planning
-  standardı) → doğru seçim, seasonal-naive'i geçiyor.
-- **Bug (küçük, bloklamıyor):** promotion kapısı `smape_max=35` sabit → wMAPE-optimize koşumda
-  `promotion=FAIL` diyor ama seçim/başarı doğru. Metrik-duyarlı promotion → v1.1.
-- `weighted_ensemble` klasiği dışlıyor (cutoff-tabanlı OOF ≠ fold-tabanlı, ADR 0023 v1).
+- **m3:** ADR 0023 forecasting'i çalışır yaptı (reduction-only sMAPE 47 → auto_ets 16, holdout **63→17**).
+  Seasonal-naive M3 monthly'de competition-grade → auto_ets %8 içinde, iyi sonuç. `classical_ensemble`
+  (EAT, 6 üye) **kuruldu ve yarıştı** ama 1-SE kuralı simpler `auto_ets`'i tercih etti (M3 homojen,
+  EAT kazancı < 1SE — **doğru davranış**; EAT heterojen M4-tarzı panelde parlar).
+- **tourism:** ✅ SUCCESS (wMAPE +5.9%). İlk koşum sMAPE'de fail'di (y≈0 → sMAPE patlar) →
+  `primary_metric=wmape` düzeltmesi.
+- **m5 (kesikli talep): 🔴 rekabetçi DEĞİL.** wMAPE 105 (>100 = hata > toplam talep). Tweedie ipucu
+  **doğru tetiklendi** ("panelin %93'ü düzensiz") ama tek başına yetmez. M5 winner'ın stack'i:
+  hiyerarşik LightGBM (per store-dept, pooled değil) + Tweedie + zengin özellikler (rolling/price/
+  calendar) + **recursive multi-step**. Bizde: tek pooled model + direct h-step + temel lag.
+  **Sonuç: M5-rekabetçi intermittent forecasting Gap #2+#4+#5'i BİRLİKTE gerektirir** (ADR 0025+).
+- **Bug (bloklamıyor):** promotion kapısı `smape_max=35` sabit → wMAPE koşumda yanlış `FAIL`. v1.1.
+- `weighted_ensemble` (reduction) ve `classical_ensemble` ayrı yarışır; ortak GES v1.1.
 
 ## Sonraki dalgalar
 - **3. dalga:** yüksek boyut/seyrek, ordinal, quantile; `--hpo light/thorough` karşılaştırması.
