@@ -176,6 +176,9 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
   pencere + kısa seri filtresi + `SeasonalNaive` fallback) → per-model `ValidationReport` **+
   `classical_ensemble`** (EAT: aynı OOF matrisinde GES — M3/M4 winner deseni). Şampiyon klasik/EAT ise
   `FittedClassicalForecaster` (çok-model + ağırlık, `sf.predict` kolonlarının ağırlıklı ortalaması).
+  **ADR 0029:** `predict` istenen `ds` aralığını kapsayacak değişken ufuk kullanır
+  (`_horizon_for`, `[h, h·24+366]` clamp) — şampiyon `train−holdout`'ta fit edilse bile gerçek
+  gelecek serve edilir (yoksa "son değer" fallback'ine düşüyordu).
   `run_core_pipeline(run_classical=True)` iki aileyi birleştirir; `RunConfig.classical_forecasting` bayrağı.
   **v1:** reduction↔klasik ortak GES dışlanır (cutoff ≠ fold OOF); reduction pooled
 - **Tweedie ipucu (ADR 0024):** `planner._model_hints` — panelin ≥%50'si düzensiz talep →

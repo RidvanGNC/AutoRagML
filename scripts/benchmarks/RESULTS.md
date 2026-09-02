@@ -89,6 +89,31 @@ m5: recursive multi-step + per-grup olmadan rich features tek başına yetmiyor 
 - **Bug (bloklamıyor):** promotion kapısı `smape_max=35` sabit → wMAPE koşumda yanlış `FAIL`. v1.1.
 - `weighted_ensemble` (reduction) ve `classical_ensemble` ayrı yarışır; ortak GES v1.1.
 
+### 2c — recursive multi-step (ADR 0026 B) + guardrail nonneg-clip (ADR 0027), `--hpo none`
+
+| dataset | koşum | şampiyon | OOF wMAPE | nihai holdout wMAPE |
+|---|---|---|---|---|
+| m5_subset | direct (2b) | `tsb` | 80.4 | 75.9 |
+| m5_subset | `--forecast-reduction recursive` | `tsb` | 80.4 | 75.9 |
+| m5_subset | recursive **+ ADR 0027** | **`auto_ets`** | **77.8** | **74.9** |
+
+- **Recursive tek başına M5'i hareket ettirmedi** — şampiyon yine `tsb` (reduction ailesi rekabetçi
+  değil, strateji fark etmiyor). Recursive GBDT OOF ~83 (direct'e yakın); forest modeller recursive'de
+  hata birikmesiyle patlıyor (wMAPE 108-127). Recursive-h CV altyapısı doğru çalışıyor.
+- **ADR 0027 gerçek kazanç:** leaderboard'da en iyi tahminciler (`classical_ensemble` 77.2, `auto_ets`
+  77.8, `auto_theta` 78.8) ~%2 küçük negatif tahmin (ETS/Theta additive doğası, kesikli talepte y≈0)
+  yüzünden `prediction_negative` ile karantinaya alınıyordu; `auto_nonneg` kırpma bunları serving'de
+  garanti 0'a çekiyor. Guardrail artık kırpmayı biliyor → şampiyon `tsb` (80.4) → `auto_ets` (77.8),
+  holdout 75.9 → 74.9.
+- **Klasik serving bug → ADR 0029 ile düzeltildi:** forecasting `champion_test_score` (yukarıda
+  "test 105.2") klasik şampiyon için sabit/yanlıştı — `FittedClassicalForecaster.predict` yalnız
+  fit-sonrası ilk `h` adımı üretiyordu; şampiyon `train−holdout`'ta fit edilince gerçek gelecek
+  pencerenin ötesinde → tüm satırlar "son değer" fallback (3 koşumda byte-identik 105.2). Artık
+  `predict` istenen `ds` aralığını kapsayacak kadar ileri tahmin eder. **Nihai holdout
+  (orchestrator) zaten doğruydu** (OOF + holdout raporlandı).
+
 ## Sonraki dalgalar
+- **ADR 0028+0029 birlikte:** m5 `--only m5_subset` (SBC segmentasyonu + düzeltilmiş klasik serving) — pending.
 - **3. dalga:** yüksek boyut/seyrek, ordinal, quantile; `--hpo light/thorough` karşılaştırması.
-- **v1.1:** klasik+reduction ortak ensemble (ortak backtest ızgarası); recursive multi-step.
+- **v1.1:** orchestrator `champion_refit_full` (feature modellere güncellik); klasik+reduction ortak
+  ensemble; segment-arası ensemble.

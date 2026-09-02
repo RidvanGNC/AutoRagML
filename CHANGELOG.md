@@ -8,6 +8,14 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 
 ## [Unreleased]
 
+### Düzeltildi
+- **Klasik forecaster serving — arbitrary gelecek penceresi** (ADR 0029, m5 benchmark bulgusundan):
+  `FittedClassicalForecaster.predict` sabit `sf.predict(h=self._h)` çağırıyordu → yalnız fit sonrası
+  ilk `h` adım. Şampiyon `train − holdout`'ta fit edilince (ADR 0020 holdout carve) gerçek gelecek
+  bu pencerenin ötesinde kalıp tarih-merge tutmuyor, tüm satırlar "son değer" fallback'ine düşüyordu
+  (m5: 3 farklı klasik şampiyonda byte-identik wMAPE 105.2). Artık `predict` istenen `ds` aralığını
+  kapsayacak kadar ileri tahmin eder (`_horizon_for`, `[h, h·24+366]` clamp). `__init__` `freq` alır.
+
 ### Değişti
 - **Guardrail `prediction_negative` serving-clip'e duyarlı** (ADR 0027, m5 benchmark bulgusundan):
   `postprocess` negatif-olmayan kırpma tabanı (`clip.lower ≥ 0` veya `auto_nonneg` + forecasting/

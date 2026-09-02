@@ -284,7 +284,9 @@ class FittedClassicalForecaster:
     `predict` = model-başı forecast kolonlarının ağırlıklı ortalaması.
     """
 
-    __slots__ = ("_aliases", "_group_col", "_h", "_last", "_sf", "_time_col", "_weights")
+    __slots__ = (
+        "_aliases", "_freq", "_group_col", "_h", "_last", "_sf", "_time_col", "_train_end", "_weights"
+    )
 
     def __init__(
         self,
@@ -296,6 +298,7 @@ class FittedClassicalForecaster:
         train_ndf: pd.DataFrame,
         group_col: str | None,
         time_col: str,
+        freq: str,
     ) -> None:
         self._sf = sf
         self._aliases = aliases
@@ -303,10 +306,28 @@ class FittedClassicalForecaster:
         self._h = horizon
         self._group_col = group_col
         self._time_col = time_col
+        self._freq = freq
         self._last = train_ndf.groupby("unique_id")["y"].last().to_dict()
+        self._train_end = pd.Timestamp(pd.to_datetime(train_ndf["ds"]).max())
+
+    def _horizon_for(self, target_max: pd.Timestamp | None) -> int:
+        """İstenen tarih penceresini kapsayacak adım sayısı (ADR 0023 — serving arbitrary future).
+
+        Şampiyon `train − holdout` üzerinde fit edildiğinde (ADR 0020 holdout carve),
+        `sf.predict(h)` yalnız fit sonrası `h` adımı üretir; gerçek gelecek daha ileride olabilir.
+        """
+        if target_max is None or pd.isna(target_max) or target_max <= self._train_end:
+            return self._h
+        try:
+            steps = len(pd.date_range(self._train_end, target_max, freq=self._freq)) - 1
+        except (ValueError, TypeError):
+            return self._h
+        return int(min(max(self._h, steps), self._h * 24 + 366))
 
     def predict(self, frame: pd.DataFrame) -> _Arr:
-        fc = self._sf.predict(h=self._h).reset_index()
+        tgt_ds = pd.to_datetime(frame[self._time_col], errors="coerce")
+        horizon = self._horizon_for(tgt_ds.max())
+        fc = self._sf.predict(h=horizon).reset_index()
         fc["ds"] = pd.to_datetime(fc["ds"])
         blended = np.zeros(len(fc), dtype=np.float64)
         for alias, w in zip(self._aliases, self._weights, strict=True):
@@ -351,6 +372,7 @@ def _fit_forecaster(
         train_ndf=ndf,
         group_col=task.group_col,
         time_col=task.time_col or "ds",
+        freq=freq,
     )
 
 

@@ -80,6 +80,29 @@ def test_classical_refit_predicts_future_horizon() -> None:
     assert float(np.median(err)) < 25
 
 
+def test_classical_predicts_window_beyond_fit_horizon() -> None:
+    """ADR 0029: şampiyon `train − holdout`'ta fit; gerçek gelecek `h`'den ileride → predict
+    istenen pencereyi kapsayacak kadar ileri tahmin etmeli (fallback'e düşmemeli)."""
+    df = _panel()
+    cfg, ds, profile, task = _prep(df)  # horizon = 4
+    ets = next(c for c in resolve_candidates(cfg, task) if c.key == "auto_ets")
+
+    # 8 dönem kes (2·h) → istenen holdout penceresi train sonundan 5..8 adım ileride
+    train = df.groupby("unique_id", group_keys=False).apply(lambda g: g.iloc[:-8])
+    forecaster = refit_classical(ets, train, profile, task, cfg)
+
+    full = df.sort_values(["unique_id", "ds"]).reset_index(drop=True)
+    preds = forecaster.predict(full)
+    last4 = (full.groupby("unique_id", sort=False).cumcount(ascending=False) < 4).to_numpy()
+    y_pred = preds[last4]
+    assert not np.isnan(y_pred).any()
+    # fallback tespiti: fallback tüm holdout'u seri-başı sabit "son değer" yapardı
+    for uid, grp_pred in pd.Series(y_pred).groupby(full.loc[last4, "unique_id"].to_numpy()):
+        assert grp_pred.nunique() > 1, f"{uid}: sabit tahmin — fallback şüphesi"
+    err = np.abs(y_pred - full.loc[last4, "y"].to_numpy())
+    assert float(np.median(err)) < 30
+
+
 def test_classical_ensemble_refit() -> None:
     df = _panel()
     cfg, ds, profile, task = _prep(df)
