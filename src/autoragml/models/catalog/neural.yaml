@@ -39,5 +39,6 @@ real_tab_r:
   modalities: [tabular]                 # KNN-tabanlı; reduction panelinde pahalı → yalnız tabular
   tasks: [regression, binary_classification, multiclass_classification]
   predict_kind: [point, proba]
-  requires: [pytabkit]
+  requires: [pytabkit, skorch, faiss]   # RealTabR skorch + faiss'e bağlı (opt-in-opt-in):
+                                        # pip install skorch faiss-cpu
   default_params: {random_state: 42, n_cv: 1}

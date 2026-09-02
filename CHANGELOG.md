@@ -18,7 +18,11 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
   - `RunConfig` +`neural_enabled`/`neural_device`/`neural_determinism`/`neural_min_rows`/`neural_max_rows`;
     `tabular_fast` preset → `neural_enabled="off"`.
   - `EnvInfo.accelerator` (additive) — manifest'e torch/cuda sürüm + device + determinizm modu.
-  - Determinizm varsayılanı `best_effort` (CPU tam deterministik; GPU manifest'e sürüm yazar).
+  - Determinizm varsayılanı `best_effort` (CPU tam deterministik; GPU manifest'e sürüm yazar);
+    `configure_torch` RTX 40xx için `float32_matmul_precision("high")`.
+  - `real_tab_r` opt-in-opt-in (`requires: [pytabkit, skorch, faiss]`) — `[neural]` extra yalnız pytabkit+torch.
+  - **Doğrulandı (RTX 4060):** torch 2.6.0+cu124 GPU tespiti · e2e'de RealMLP GBDT'yi geçti
+    (nonlinear veri RMSE 0.39 vs 0.79) · GES nöralleri aldı · serving + `accelerator` manifest OK.
   - **v1 sınırı:** `FeaturePipeline` nöral adaylara da tam uygulanır (pytabkit çift-transform) → v1.1.
   - FT-Transformer / mimari arama → ADR 0031.
 

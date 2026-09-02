@@ -135,11 +135,32 @@ zaten uyuyor. Çekirdek **torch'suz kalır** (ADR 0003); nöral yalnız `[neural
 - `tests/unit/models/test_neural_tier.py` (12): torch-yok güvenliği, katalog-atla, kapı matrisi,
   cihaz enjeksiyonu, config + preset.
 
-### Kalan (bu ADR kapsamında, kurulum sonrası)
+### Kurulum + doğrulama (RTX 4060, 2026-09-03) ✅
 
-- `pip install -e ".[neural]"` + CUDA torch (`--index-url .../cu124`) → RTX 4060 doğrulaması.
-- CPU/GPU e2e: küçük tablo (`neural_enabled="on"`) → `real_mlp` yarışır + serving.
-- Benchmark: 1. dalga `--hpo none` GPU'da — RealMLP GBDT'yi yakalıyor mu?
+```
+pip install torch --index-url https://download.pytorch.org/whl/cu124   # 2.6.0+cu124
+pip install pytabkit skorch                                            # 1.7.3 + lightning 2.6
+```
+
+- `torch.cuda.is_available() → True`, `NVIDIA GeForce RTX 4060`, `cuda 12.4`. **PyTorch RTX 4060'ı
+  ilk denemede gördü — debug gerekmedi** (Keras/TF GPU dertleri PyTorch'a bulaşmıyor).
+- `pytabkit.RealMLP_TD_Regressor` doğrudan fit/predict GPU'da OK.
+- `AutoRagML().fit(..., neural_enabled="on")` e2e (**doğrusal-olmayan sentetik, 700 satır**):
+  ```
+  şampiyon: real_mlp  (RMSE 0.392)
+  tab_m 0.483 · weighted_ensemble 0.549 · lightgbm 0.785 · hist_gbm 0.849 · ... · ridge 2.686
+  ```
+  **RealMLP GBDT'yi net geçti** (0.39 vs 0.79) — araştırmanın vaadi doğrulandı. Her ikisi GPU'da
+  eğitildi, GES (`weighted_ensemble`) nöralleri aldı, serving çalıştı, `accelerator` manifest doldu.
+- `real_tab_r`: `skorch` + `faiss` zinciri gerektiriyor → `requires: [pytabkit, skorch, faiss]`
+  (opt-in-opt-in, `[neural]` extra'ya girmez); faiss yoksa registry temiz atlar.
+- `configure_torch`: RTX 40xx için `torch.set_float32_matmul_precision("high")` (Tensor Core, determinizmi bozmaz).
+- Testler torch present/absent iki senaryoya da dayanıklı (skipif markerleri) — CI (`[neural]` yok)
+  "absent" dalını, lokal "present" dalını koşar.
+
+### Kalan (opsiyonel, bu ADR dışı)
+
+- Benchmark: 1. dalga `--hpo none` GPU'da — RealMLP GBDT'yi yakalıyor mu? (ADR 0031 sonrası birlikte)
 
 ### v1 sınırı (açık)
 

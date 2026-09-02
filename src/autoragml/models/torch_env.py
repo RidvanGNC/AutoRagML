@@ -6,6 +6,7 @@ her fonksiyon torch yoksa **güvenli/boş** döner. `configure_torch` idempotent
 
 from __future__ import annotations
 
+import contextlib
 import os
 import random
 from functools import lru_cache
@@ -91,6 +92,9 @@ def configure_torch(seed: int, mode: DeterminismMode = "best_effort", device: st
     torch.manual_seed(seed)
     if has_cuda():
         torch.cuda.manual_seed_all(seed)
+        # Tensor Core'lu GPU'larda (RTX 40xx) matmul hızlandırması — determinizmi bozmaz
+        with contextlib.suppress(Exception):
+            torch.set_float32_matmul_precision("high")
 
     if mode != "off":
         torch.backends.cudnn.deterministic = True
