@@ -155,10 +155,13 @@ def _classical_ensemble(
         return compute_metrics(yt, yp, task.task).get(primary, float("inf"))
 
     ec = config.ensemble
-    if ec.bagging:
+    # Klasik havuz küçük (≤6) ve model kalitesi çok değişken (auto_ets vs croston) → bagged-GES
+    # ağırlığı fazla yayıyor. Plain GES seçici kalır (M4 winner deseni: iyi modellere ağır ağırlık).
+    n_bags = ec.n_bags if (ec.bagging and preds.shape[1] > 6) else 0
+    if n_bags:
         w = bagged_greedy_selection(
             preds, y_true, metric_fn=metric_fn, lower_is_better=lower, max_models=ec.max_models,
-            sorted_init_k=ec.sorted_init_k, n_bags=ec.n_bags, bag_fraction=ec.bag_fraction, seed=config.seed,
+            sorted_init_k=ec.sorted_init_k, n_bags=n_bags, bag_fraction=ec.bag_fraction, seed=config.seed,
         )
     else:
         w = greedy_selection(
