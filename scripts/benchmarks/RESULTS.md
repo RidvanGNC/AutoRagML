@@ -140,8 +140,16 @@ m5: recursive multi-step + per-grup olmadan rich features tek başına yetmiyor 
 **tourism_large — segmentasyon HAFİF REGRESYON → kapı eklendi:** segmentleyince +10.3% → +8.9%
 (`lumpy`(98) segmenti `dummy_median`'a düştü; pooled'da cross-series öğrenme yardım ediyordu).
 Panel yalnız %18 kesikli+lumpy. **Çözüm:** `_resolve_segments` kesikli-baskınlık kapısı
-(`(intermittent + lumpy) / total ≥ segment_sparse_min_frac=0.5`) — tourism artık pooled
-(+10.3%), M5 (%90) segment kalıyor.
+(`(intermittent + lumpy) / total ≥ segment_sparse_min_frac=0.5`) — tourism artık pooled, M5 (%90)
+segment kalıyor.
+
+**tourism_large pooled — şampiyon `extra_trees` (+10.3%) → `auto_ets` (+6.5%):** ADR 0027 sonrası
+`auto_ets` artık uygun (küçük negatifler için karantina yok) ve 1-SE + family-complexity kuralı
+onu `extra_trees`'e tercih ediyor (OOF wMAPE 17.25, statistical < forest). **Nihai holdout
+`auto_ets` LEHİNE** (18.12 → 16.44); benchmark test hafif aleyhine (17.61 → 18.37). ~%4 fark =
+tek-holdout seçim gürültüsü; ikisi de naive'i (19.64) net geçiyor. Selection heuristik'ini tek
+benchmark'a göre ayarlamak "sağlıklı başarı"ya aykırı → kabul. (v1.1: MCB/DM ile aile-arası
+tie-break daha titiz olabilir.)
 
 ## Sonraki dalgalar
 - **ADR 0028+0029 birlikte:** m5 `--only m5_subset` (SBC segmentasyonu + düzeltilmiş klasik serving) — pending.
