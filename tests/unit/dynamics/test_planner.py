@@ -158,6 +158,29 @@ def test_no_tweedie_hint_for_smooth_panel() -> None:
     assert plan.model_hints == {}
 
 
+def test_segments_split_by_intermittency_class() -> None:
+    """ADR 0028: karışık süreksizlik → per_group_champion + SBC sınıfına göre segmentler."""
+    days = pd.date_range("2023-01-02", periods=200, freq="D")
+    rng = np.random.default_rng(20)
+    rows: list[dict[str, object]] = []
+    for i in range(6):  # düzgün (smooth) seriler
+        for j, d in enumerate(days):
+            rows.append({"g": f"sm{i}", "ds": d, "y": 50 + 10 * np.sin(j / 7 * 6.28) + rng.normal(0, 2)})
+    for i in range(6):  # kesikli (intermittent) seriler
+        for d in days:
+            rows.append({"g": f"it{i}", "ds": d, "y": float(rng.integers(1, 5)) if rng.random() < 0.15 else 0.0})
+    plan, _, _ = _plan(
+        pd.DataFrame(rows), time_col="ds", group_col="g", split_policy={"horizon": 7},
+        dynamics={"structure": "per_group_champion", "segment_min_series": 3},
+    )
+    assert plan.structure == "per_group_champion"
+    assert len(plan.segments) >= 2
+    all_ids = {gid for seg in plan.segments for gid in seg.group_ids}
+    assert all_ids == {f"sm{i}" for i in range(6)} | {f"it{i}" for i in range(6)}
+    # her seri tam bir segmentte
+    assert sum(len(seg.group_ids) for seg in plan.segments) == 12
+
+
 def test_seasonal_difference_default_for_trending_seasonal_panel() -> None:
     """ADR 0026: forecasting + mevsim ≥ horizon + trend/mevsim gücü → seasonal_difference varsayılan."""
     months = pd.date_range("2016-01-01", periods=84, freq="MS")

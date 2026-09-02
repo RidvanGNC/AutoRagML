@@ -38,6 +38,15 @@ class RegimeDef(Contract):
     params: dict[str, object] = Field(default_factory=dict)
 
 
+class SegmentSpec(Contract):
+    """Bir segment — `structure="per_group_champion"` iken çekirdek pipeline segment başına
+    koşar, serving her seriyi kimliğiyle kendi segmentine yönlendirir (ADR 0028)."""
+
+    name: str  # ör. "smooth" | "intermittent" | "lumpy_erratic"
+    group_ids: list[str] = Field(min_length=1)
+    source: str = "intermittency_class"  # segmentasyon ölçütü
+
+
 class AdaptivePlan(Contract):
     """Veriye-özel işleme planı. Karar üretir; fit etmez."""
 
@@ -45,6 +54,7 @@ class AdaptivePlan(Contract):
     candidate_ops: list[CandidateOpGroup] = Field(default_factory=list)
     row_policies: list[str] = Field(default_factory=list)
     structure: Literal["pooled", "per_group_champion"] = "pooled"
+    segments: list[SegmentSpec] = Field(default_factory=list)  # boş = pooled (ADR 0028)
     regimes: list[RegimeDef] = Field(default_factory=list)
     family_policy: dict[str, str] = Field(default_factory=dict)  # family -> op yoğunluğu
     recipes_used: list[str] = Field(default_factory=list)

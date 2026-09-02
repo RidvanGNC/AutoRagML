@@ -116,14 +116,14 @@ def test_timeseries_engine_classical_competes() -> None:
 
 def test_timeseries_engine_recursive_reduction() -> None:
     """ADR 0026 B: forecast_reduction=recursive → 1-adım model + recursive-h serving."""
-    df = _panel_df()
+    df = _monthly_panel()  # küçük panel — recursive-h CV maliyeti yüksek
     ds, cfg, profile, task = _prep(
         df,
         time_col="ds",
         group_col="g",
         classical_forecasting=False,
         forecast_reduction="recursive",
-        split_policy={"horizon": 4},
+        split_policy={"horizon": 3, "n_folds": 2},
     )
     result = InProcessRunner().run(TimeSeriesCoreEngine(), ds, cfg, profile, task)
     assert result.status in {EngineStatus.SUCCESS, EngineStatus.PARTIAL}
@@ -133,8 +133,42 @@ def test_timeseries_engine_recursive_reduction() -> None:
     assert all(r.model_key != "weighted_ensemble" for r in result.scoreboard.rows)
     pred = result.champion.pipeline.predict(df)
     assert len(pred) == len(df)
-    tail = df.groupby("g", sort=False).cumcount(ascending=False) < 4
+    tail = df.groupby("g", sort=False).cumcount(ascending=False) < 3
     assert not np.isnan(pred[tail.to_numpy()]).any()  # tahmin ufku dolu
+
+
+def _mixed_intermittency_panel() -> pd.DataFrame:
+    """Yarısı düzgün, yarısı kesikli aylık seriler — SBC segmentasyonu tetikler (ADR 0028)."""
+    months = pd.date_range("2019-01-01", periods=72, freq="MS")
+    rng = np.random.default_rng(7)
+    rows: list[dict[str, object]] = []
+    for i in range(4):
+        for j, m in enumerate(months):
+            rows.append({"g": f"sm{i}", "ds": m, "y": max(0.0, 80 + 15 * np.sin(j / 12 * 6.28) + rng.normal(0, 4))})
+    for i in range(4):
+        for m in months:
+            rows.append({"g": f"it{i}", "ds": m, "y": float(rng.integers(2, 9)) if rng.random() < 0.2 else 0.0})
+    return pd.DataFrame(rows)
+
+
+def test_timeseries_engine_segmented_champion() -> None:
+    """ADR 0028: karışık panel → segment başına şampiyon + yönlendirmeli serving."""
+    df = _mixed_intermittency_panel()
+    ds, cfg, profile, task = _prep(
+        df, time_col="ds", group_col="g", classical_forecasting=False,
+        split_policy={"horizon": 6},
+        dynamics={"structure": "per_group_champion", "segment_min_series": 3},
+    )
+    assert len(cfg.dynamics.recipes) == 0
+    result = InProcessRunner().run(TimeSeriesCoreEngine(), ds, cfg, profile, task)
+    assert result.status in {EngineStatus.SUCCESS, EngineStatus.PARTIAL}
+    assert result.champion.metadata.model_key == "segmented"
+    segs = result.champion.metadata.adaptive_plan_summary["segments"]
+    assert len(segs) >= 2
+    assert any("segment" in m for m in result.messages)
+    pred = result.champion.pipeline.predict(df)
+    assert len(pred) == len(df)
+    assert not np.isnan(pred).any()
 
 
 def test_postprocess_embedded_in_champion_bundle() -> None:

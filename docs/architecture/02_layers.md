@@ -48,6 +48,9 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
   - `candidate_ops`: `heavy_tailed_numeric` + `target` grupları (log1p/yeo_johnson/quantile —
     HPO uzayında; hedef negatifse log1p elenir)
   - `structure`: auto → forecasting + group_col + yeterli seri/geçmiş ise `per_group_champion`
+  - `segments` (ADR 0028): `per_group_champion` iken SBC intermittency sınıfına göre segment
+    listesi (`_resolve_segments` — küçükler ADI ekseninde komşuya birleşir, ≤ `segment_max_count`);
+    < 2 anlamlı segment → boş (pooled)
   - `row_policies`: `intermittent_augment:<class>` (havuz genişletir), `filter_low_activity`,
     `coldstart_split` · `regimes`: scenario_2 aktifse trend/volatility/joint
   - `family_policy`: gbdt/forest→minimal, linear/neural→full
@@ -185,7 +188,10 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
   estimator+ES), `_fit_pipeline` (bag/tek karar). `model_pipeline.FittedModelPipeline` +
   `ensemble_pipeline.FittedEnsemblePipeline` (`Predictor` protokolü)
 - `runners/InProcessRunner` — engine'i sarar; çökme → `EngineResult(status=FAILED)`
-- **v1 sınırı:** `per_group_champion` planlanır ama pooled ile ilerlenir (per-group refit v1.1)
+- `segmented.py` (ADR 0028) — `plan.segments` varsa `TimeSeriesCoreEngine` segment başına
+  `_run_pooled` koşar; `run_segmented` sonuçları `FittedSegmentedPipeline` (grup→segment
+  yönlendirme, bilinmeyen→en büyük segment) + birleşik `EngineResult`'a katlar. Şampiyon tek
+  `ModelBundle`, `model_key="segmented"`, segment haritası `adaptive_plan_summary["segments"]`.
 
 ## postprocessors/  (ADR 0017 — KOD YAZILDI)
 - **Girdi:** `PostprocessConfig` + `DataProfile` + `TaskSpec` + `champ_report.oof`

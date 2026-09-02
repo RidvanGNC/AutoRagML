@@ -14,6 +14,7 @@ from autoragml.contracts.adaptive_plan import (
     CandidateOpGroup,
     ColumnOp,
     RegimeDef,
+    SegmentSpec,
 )
 from autoragml.contracts.data_profile import DataProfile
 from autoragml.contracts.dynamics_config import DynamicsConfig
@@ -189,6 +190,62 @@ def _resolve_structure(
     return "per_group_champion"
 
 
+# SBC sınıfları ADI ekseninde sıralı — küçük segment en yakın komşuya birleşir (ADR 0028)
+_SEGMENT_ORDER = (
+    IntermittencyClass.SMOOTH,
+    IntermittencyClass.ERRATIC,
+    IntermittencyClass.INTERMITTENT,
+    IntermittencyClass.LUMPY,
+)
+
+
+def _resolve_segments(profile: DataProfile, task: TaskSpec, cfg: DynamicsConfig) -> list[SegmentSpec]:
+    """`per_group_champion` iken serileri SBC intermittency sınıfına göre segmentle (ADR 0028).
+
+    Boş liste döndürürse engine pooled ilerler (tek anlamlı segment / yetersiz seri).
+    """
+    ts = profile.timeseries
+    if ts is None or not task.group_col or not ts.per_series:
+        return []
+
+    by_class: dict[IntermittencyClass, list[str]] = {}
+    for sp in ts.per_series:
+        cls = sp.intermittency_class
+        if cls is IntermittencyClass.INSUFFICIENT:
+            cls = IntermittencyClass.INTERMITTENT  # kısa/az-aktif seriler intermittent'a
+        by_class.setdefault(cls, []).append(sp.group)
+
+    # sıralı eksende küçük grupları komşuya kaydır
+    ordered = [(c, by_class.get(c, [])) for c in _SEGMENT_ORDER if by_class.get(c)]
+    if not ordered:
+        return []
+    merged: list[tuple[str, list[str]]] = []
+    for cls, ids in ordered:
+        if merged and len(ids) < cfg.segment_min_series:
+            prev_name, prev_ids = merged[-1]
+            merged[-1] = (f"{prev_name}+{cls.value}", [*prev_ids, *ids])
+        else:
+            merged.append((cls.value, list(ids)))
+    # baştaki küçük segment → sonrakine
+    while len(merged) > 1 and len(merged[0][1]) < cfg.segment_min_series:
+        (n0, i0), (n1, i1) = merged[0], merged[1]
+        merged[1] = (f"{n0}+{n1}", [*i0, *i1])
+        merged.pop(0)
+    # sayı sınırı: en küçükleri sonrakine kat
+    while len(merged) > cfg.segment_max_count:
+        j = min(range(len(merged)), key=lambda k: len(merged[k][1]))
+        tgt = j + 1 if j + 1 < len(merged) else j - 1
+        merged[tgt] = (f"{merged[j][0]}+{merged[tgt][0]}", [*merged[j][1], *merged[tgt][1]])
+        merged.pop(j)
+
+    if len(merged) < 2:
+        return []
+    return [
+        SegmentSpec(name=name, group_ids=sorted(ids), source="intermittency_class")
+        for name, ids in merged
+    ]
+
+
 def _row_policies(profile: DataProfile, task: TaskSpec) -> list[str]:
     policies: list[str] = []
     ts = profile.timeseries
@@ -243,17 +300,24 @@ def build_plan(profile: DataProfile, task: TaskSpec, config: RunConfig) -> Adapt
     committed, notes = _committed_ops(profile, task, cfg)
     candidate = _candidate_ops(profile, task, cfg)
     structure = _resolve_structure(profile, task, cfg)
+    segments = _resolve_segments(profile, task, cfg) if structure == "per_group_champion" else []
     row_policies = _row_policies(profile, task)
     regimes = _regimes(config)
 
     for note in notes:
         logger.info("[dynamics] %s", note)
+    if segments:
+        logger.info(
+            "[dynamics] %d segment: %s",
+            len(segments), ", ".join(f"{s.name}({len(s.group_ids)})" for s in segments),
+        )
 
     return AdaptivePlan(
         committed_ops=committed,
         candidate_ops=candidate,
         row_policies=row_policies,
         structure=structure,
+        segments=segments,
         regimes=regimes,
         family_policy=dict(_FAMILY_POLICY),
         recipes_used=list(cfg.recipes),

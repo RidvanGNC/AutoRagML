@@ -3,6 +3,9 @@
 Akış: reduction FE (leakage-safe, shift≥horizon) → ortak akış. Reduction adayları
 tabular pipeline'dan, **klasik adaylar (statsforecast) native `StatsForecast` yolundan**
 (`run_classical=True`) geçer; şampiyon her iki aileden olabilir.
+
+`plan.structure == "per_group_champion"` + `plan.segments` → segment başına pooled akış
+(ADR 0028); serving `FittedSegmentedPipeline` yönlendirir.
 """
 
 from __future__ import annotations
@@ -17,7 +20,9 @@ from autoragml.contracts.dataset import Dataset
 from autoragml.contracts.engine_result import EngineResult
 from autoragml.contracts.run_config import RunConfig
 from autoragml.contracts.task_spec import TaskSpec
+from autoragml.dynamics import build_plan
 from autoragml.engines.core import run_core_pipeline
+from autoragml.engines.segmented import run_segmented
 from autoragml.engines.timeseries.classical import _resolve_freq, _season_length
 from autoragml.engines.timeseries.reduction import build_reduction_features
 from autoragml.io import materialize_frame
@@ -29,6 +34,20 @@ logger = get_logger(__name__)
 
 def _reduce_only(frame: pd.DataFrame, task: TaskSpec, horizon: int, season: int) -> pd.DataFrame:
     return build_reduction_features(frame, task, horizon=horizon, season=season)[0]
+
+
+def _subset_profile(profile: DataProfile, ids: set[str]) -> DataProfile:
+    """Segment serilerine daraltılmış profil (ADR 0028) — per_series + intermittency_summary."""
+    ts = profile.timeseries
+    if ts is None:
+        return profile
+    per = [sp for sp in ts.per_series if sp.group in ids]
+    summary: dict[str, int] = {}
+    for sp in per:
+        summary[sp.intermittency_class.value] = summary.get(sp.intermittency_class.value, 0) + 1
+    return profile.model_copy(
+        update={"timeseries": ts.model_copy(update={"per_series": per, "intermittency_summary": summary})}
+    )
 
 
 class TimeSeriesCoreEngine:
@@ -46,16 +65,37 @@ class TimeSeriesCoreEngine:
         tuner: Tuner | None = None,
     ) -> EngineResult:
         frame = materialize_frame(dataset)
-        horizon = task.horizon or (config.split_policy.horizon if config.split_policy else None) or 4
-        season = _season_length(profile, _resolve_freq(profile))
+        horizon = int(
+            task.horizon or (config.split_policy.horizon if config.split_policy else None) or 4
+        )
+        season = int(_season_length(profile, _resolve_freq(profile)))
 
-        if config.forecast_reduction == "recursive":
-            return self._run_recursive(
-                frame, config, profile, task, tuner, int(horizon), int(season)
+        plan = build_plan(profile, task, config)
+        if plan.segments:
+            logger.info("[engine] segmented: %d segment", len(plan.segments))
+            return run_segmented(
+                self.key,
+                lambda sf, sp: self._run_pooled(sf, config, sp, task, tuner, horizon, season),
+                frame, profile, task, plan,
+                subset_profile=_subset_profile,
             )
+        return self._run_pooled(frame, config, profile, task, tuner, horizon, season)
+
+    def _run_pooled(
+        self,
+        frame: pd.DataFrame,
+        config: RunConfig,
+        profile: DataProfile,
+        task: TaskSpec,
+        tuner: Tuner | None,
+        horizon: int,
+        season: int,
+    ) -> EngineResult:
+        if config.forecast_reduction == "recursive":
+            return self._run_recursive(frame, config, profile, task, tuner, horizon, season)
 
         augmented, new_cols = build_reduction_features(
-            frame, task, horizon=int(horizon), season=int(season)
+            frame, task, horizon=horizon, season=season
         )
         messages: list[str] = []
         if new_cols:
@@ -66,10 +106,10 @@ class TimeSeriesCoreEngine:
                 sampled=False,
             )
             profile = profile.model_copy(update={"columns": [*profile.columns, *extra]})
-            messages.append(f"reduction: {len(new_cols)} hedef-türevi özellik (shift≥{int(horizon)}).")
+            messages.append(f"reduction: {len(new_cols)} hedef-türevi özellik (shift≥{horizon}).")
 
         pre_transform = (
-            functools.partial(_reduce_only, task=task, horizon=int(horizon), season=int(season))
+            functools.partial(_reduce_only, task=task, horizon=horizon, season=season)
             if new_cols
             else None
         )

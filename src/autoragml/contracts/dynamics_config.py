@@ -20,6 +20,9 @@ class DynamicsConfig(Contract):
     per_group_min_series: int = Field(default=2, ge=1)
     per_group_max_series: int = Field(default=5000, ge=1)
     per_group_min_history_multiplier: float = Field(default=2.0, gt=0.0)
+    # Segmentasyon (ADR 0028) — per_group_champion iken seriler segmentlere bölünür
+    segment_min_series: int = Field(default=30, ge=2)  # altında segment komşuya birleşir
+    segment_max_count: int = Field(default=4, ge=1)
 
     # candidate_ops seçenekleri (HPO uzayında seçilir — ADR 0015)
     numeric_transform_choices: list[str] = Field(

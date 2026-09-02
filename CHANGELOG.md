@@ -18,6 +18,16 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
   `prediction_health` → `n_pred` + `frac_negative` (additive); `evaluate_guardrails(serving_clip_lower=)`.
 
 ### Eklendi
+- **Segmented champion** (ADR 0028, gap analizi Gap #5 — M5 winner hiyerarşik havuzlama deseni):
+  `plan.structure == "per_group_champion"` artık pooled'a düşmez — TS engine serileri **SBC
+  intermittency sınıfına** göre segmentlere böler (`_resolve_segments`; küçük segmentler ADI
+  ekseninde komşuya birleşir, ≤ `segment_max_count`), her segment için tam çekirdek pipeline
+  (`run_core_pipeline`) koşar. Serving `FittedSegmentedPipeline` her seriyi grup kimliğiyle kendi
+  segmentinin şampiyonuna yönlendirir (bilinmeyen kimlik → en büyük segment). Şampiyon tek
+  `ModelBundle` (`pipeline` = `FittedSegmentedPipeline`, segment→model haritası
+  `adaptive_plan_summary`). Sözleşme: `AdaptivePlan.segments` + `SegmentSpec`,
+  `DynamicsConfig.segment_min_series`/`segment_max_count` (additive). `engines/segmented.py`.
+  **v1 sınırı:** çok-seviyeli hiyerarşi (store/dept) + segment-arası ensemble + k-means kümeleme → v1.1.
 - **Recursive multi-step reduction** (ADR 0026 Bölüm B, gap analizi Gap #4 — M5/AutoGluon-TS deseni):
   `RunConfig.forecast_reduction: Literal["direct", "recursive"] = "direct"`.
   - `build_reduction_features(strategy="recursive", max_lag=None)`: `shift(1)` tabanı, lag `1..k_max`
