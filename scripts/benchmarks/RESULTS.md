@@ -156,3 +156,39 @@ tie-break daha titiz olabilir.)
 - **3. dalga:** yüksek boyut/seyrek, ordinal, quantile; `--hpo light/thorough` karşılaştırması.
 - **v1.1:** orchestrator `champion_refit_full` (feature modellere güncellik); klasik+reduction ortak
   ensemble; segment-arası ensemble.
+
+---
+
+## v1.1 TAM-STACK forecasting dalgası (2026-09-03) — nöral-TS + Chronos + joint + ADR 0038
+
+Stack: reduction (zengin özellik + Tweedie) + klasik EAT + nöral-TS (NHITS/PatchTST/TFT/NBEATSx/
+iTransformer/TSMixer) + Chronos-Bolt-small (zero-shot) + `joint_ensemble` (klasik+reduction ortak
+cutoff GES) + segmented. `--hpo none`. TabPFN kapalı.
+
+| dataset | şampiyon | test | naive | Δ% | internal holdout | durum |
+|---|---|---|---|---|---|---|
+| m3_monthly | patchtst (neural_ts) | sMAPE 16.26 | 14.80 | −9.9% | 16.65 | par (M3 naive near-SOTA) |
+| tourism_large | auto_ets | wMAPE 16.52 | 19.64 | **+15.9%** | 16.44 | ✅ |
+| m5_subset | segmented | wMAPE **77.27** | 99.60 | **+22.4%** | 71.26 | ✅ (tarihsel en iyi: +16.4%) |
+
+m5 segment şampiyonları: smooth+erratic → auto_theta (53.6) · intermittent → **nbeatsx** (82.96;
+tarihsel weighted_ens 94.9) · lumpy → **tft** (81.46; tarihsel auto_arima 86.2). Nöral 2/3.
+smooth+erratic leaderboard'da **chronos_bolt_small en iyi OOF (51.71)** ama 1-SE basitlik →
+auto_theta (~2 wMAPE maliyet).
+
+### Bu dalganın bulduğu + düzelttiği sistemik hatalar
+1. **`e4b32d6`** — `configure_torch` legacy `set_float32_matmul_precision` → torch 2.14'te nöral-TS
+   CV çöküyordu (kaldırıldı). ADR 0035/K3 "aday-başı SE" geri alındı. joint `_win`-bazlı gruplama.
+2. **`fd7c6f6`** — joint reduction üyeleri = yalnız klasik-tablo aileleri + en iyi 6 (pytabkit
+   per-cutoff refit dakikalarca sürüyordu).
+3. **`6dd7ff4` (ADR 0038)** — m3 şampiyonu `lightgbm` sMAPE **44.7 (−202%!)**. Kök: reduction OOF
+   fold-arası kararsız (SE 1.8-2.4) vs klasik (0.03-0.15); 1-SE bandı görmüyor. FIX1: `r.se > 2·band`
+   → banttan dışla. FIX2: `_ts_holdout` panelde per-seri son-h (heterojen m3: global cutoff 5652'nin
+   249'unu alıyordu). **m3 re-run: −202% → −9.9%, internal holdout artık testi tahmin ediyor.**
+4. **`24af8c3`** — `RidgeClassifier.predict_proba` yok → ADR 0036 sınıflandırma bagging çöküyordu.
+
+### Açık takip
+- promotion `smape_max=35` kesikli talepte spam FAIL (wmape doğal 50-100) — eşik intermittency'ye
+  göre ölçeklenmeli / kesikli panelde kapalı.
+- 1-SE basitlik bazen bariz-daha-iyi foundation/nöral OOF'u (chronos 51.7 → auto_theta 53.6) feda
+  ediyor — forecasting'de holdout-veto veya daha yumuşak complexity düşünülebilir.
