@@ -52,3 +52,27 @@ def test_ts_holdout_is_last_horizon_periods() -> None:
     assert pd.to_datetime(split.train["ds"]).max() < pd.to_datetime(
         split.scoring_frame.loc[split.holdout_mask, "ds"]
     ).min()
+
+
+def test_ts_holdout_heterogeneous_panel_per_series() -> None:
+    """ADR 0038: seriler farklı zamanlarda bitiyor → her seri kendi son-h holdout'unu alır."""
+    rng = np.random.default_rng(0)
+    rows = []
+    for g in ("A", "B", "C", "D"):
+        length = int(rng.integers(40, 70))
+        start = pd.Timestamp("2020-01-06") + pd.DateOffset(weeks=int(rng.integers(0, 20)))
+        for i, wk in enumerate(pd.date_range(start, periods=length, freq="W-MON")):
+            rows.append({"g": g, "ds": wk, "y": float(i)})
+    df = pd.DataFrame(rows)
+    split = split_holdout(df, _cfg(time_col="ds", group_col="g"), _FC)
+    assert split is not None and split.holdout_mask is not None
+    hold = split.scoring_frame.loc[split.holdout_mask]
+    # HER seri holdout'a katkı verir (global cutoff olsa yalnız geç-bitenler girerdi)
+    assert set(hold["g"].unique()) == {"A", "B", "C", "D"}
+    # her seri tam 4 (horizon) satır
+    assert (hold.groupby("g").size() == 4).all()
+    # her serinin holdout'u kendi son 4 satırı: train'de o serinin holdout tarihleri yok
+    for g in ("A", "B", "C", "D"):
+        tr_max = pd.to_datetime(split.train.loc[split.train["g"] == g, "ds"]).max()
+        ho_min = pd.to_datetime(hold.loc[hold["g"] == g, "ds"]).min()
+        assert tr_max < ho_min

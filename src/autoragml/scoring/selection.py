@@ -84,20 +84,31 @@ def _rank_value(row: ScoreRow, lower: bool) -> float:
     return row.oof_metric_mean if lower else -row.oof_metric_mean
 
 
-def _within_one_se(pool: list[ScoreRow], best: ScoreRow, noise_floor: float, lower: bool) -> list[ScoreRow]:
-    """1-SE bandı: en iyinin `max(best.SE, noise_floor)` toleransı içindekiler.
+_SE_BAND_MULT = 2.0  # ADR 0038: kararsız-CV filtresi — r.se > mult·band ise bantta değil
 
-    Not (ADR 0035/K3 GERİ ALINDI): "aday-başı SE" (`max(best.se, r.se)`) yüksek-varyanslı
-    bir adayın kendi SE'siyle bandı şişirip kendini içeri almasına yol açtı (m3 benchmark:
-    `elastic_net` se=5.16 → smape 17.1'i 11.9 bandına soktu → şampiyon oldu). Klasik 1-SE:
-    band **yalnız en iyi modelin** SE'si (medyan-SE tabanıyla)."""
+
+def _within_one_se(pool: list[ScoreRow], best: ScoreRow, noise_floor: float, lower: bool) -> list[ScoreRow]:
+    """1-SE bandı: en iyinin `max(best.SE, noise_floor)` toleransı içindeki **güvenilir** adaylar.
+
+    - Band = yalnız en iyi modelin SE'si (medyan-SE tabanıyla). ADR 0035/K3 "aday-başı SE"
+      (`max(best.se, r.se)`) geri alındı — gürültülü aday kendini içeri alıyordu.
+    - **Kararsız-CV filtresi (ADR 0038):** `r.oof_metric_se > _SE_BAND_MULT·band` olan aday
+      banttan dışlanır (`best` hariç). m3 benchmark: `lightgbm` sMAPE 12.25 ± 1.76 (band 0.59),
+      klasik 11.7 ± 0.03 ile "eşdeğer" sayılıp seçiliyordu → gerçek holdout sMAPE 44.
+    """
     band = max(best.oof_metric_se, noise_floor)
     if band <= 0:
         return [best]
     b = best.oof_metric_mean
-    if lower:
-        return [r for r in pool if r.oof_metric_mean <= b + band]
-    return [r for r in pool if r.oof_metric_mean >= b - band]
+    max_se = _SE_BAND_MULT * band
+    within: list[ScoreRow] = []
+    for r in pool:
+        if r.model_key != best.model_key and r.oof_metric_se > max_se:
+            continue  # CV tahmini bandın çok ötesinde belirsiz → güvenilir biçimde eşdeğer değil
+        ok = r.oof_metric_mean <= b + band if lower else r.oof_metric_mean >= b - band
+        if ok:
+            within.append(r)
+    return within or [best]
 
 
 def select_champion(

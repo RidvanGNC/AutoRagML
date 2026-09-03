@@ -1,8 +1,9 @@
 """Nihai holdout — orchestrator carve + tek-seferlik skorlama (ADR 0020).
 
-`validators` CV'sinden ayrı. Tabular: seed'li rastgele; TS: son `horizon` dönem
-(global cutoff, `[group, time]` stable sıralı). `shift(horizon)` reduction özellikleri
-bu genişlikte leakage-safe.
+`validators` CV'sinden ayrı. Tabular: seed'li rastgele; TS panel: **her serinin kendi son
+`horizon` satırı** (ADR 0038 — heterojen panelde global cutoff çoğu seriyi kaçırıyordu);
+tek seri: son `horizon` dönem global cutoff. `shift(horizon)` reduction özellikleri bu
+genişlikte leakage-safe (havuz model hiçbir seri-holdout `y`'sini görmez).
 """
 
 from __future__ import annotations
@@ -85,15 +86,22 @@ def _ts_holdout(frame: pd.DataFrame, config: RunConfig, task: TaskSpec) -> Holdo
     work[time_col] = pd.to_datetime(work[time_col], errors="coerce")
     work = work.sort_values(sort_cols, kind="mergesort").reset_index(drop=True)
 
-    distinct = np.sort(pd.Series(work[time_col].dropna().unique()))
     horizon = task.horizon or (config.split_policy.horizon if config.split_policy else None) or 4
-    k = min(int(horizon), max(1, len(distinct) - 1))
-    cutoff = distinct[-k]
-    mask = (work[time_col].to_numpy() >= cutoff)
+    k = max(1, int(horizon))
+
+    if group_col:
+        # ADR 0038: heterojen panel — her serinin **kendi** son k satırı holdout (global cutoff
+        # değil; global cutoff seriler farklı zamanlarda bitince çoğu seriyi kaçırıyordu).
+        pos_from_end = work.groupby(group_col, sort=False).cumcount(ascending=False)
+        series_len = work.groupby(group_col, sort=False)[time_col].transform("size")
+        mask = (pos_from_end.to_numpy() < k) & (series_len.to_numpy() > 2 * k)  # kısa seri korunur
+    else:
+        distinct = np.sort(pd.Series(work[time_col].dropna().unique()))
+        kk = min(k, max(1, len(distinct) - 1))
+        mask = work[time_col].to_numpy() >= distinct[-kk]
 
     if mask.sum() == 0 or mask.sum() >= len(work):
-        logger.warning("[holdout] TS holdout dejenere — atlandı")
-        # fallback: rastgele
+        logger.warning("[holdout] TS holdout dejenere — rastgele holdout'a düşülüyor")
         return _random_holdout(frame, config)
 
     return HoldoutSplit(

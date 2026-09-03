@@ -79,6 +79,21 @@ def test_one_se_rule_picks_simplest() -> None:
     assert "dummy_mean" not in sel.champion.within_1se
 
 
+def test_se_band_filter_excludes_unstable_candidate() -> None:
+    """ADR 0038: CV'si çok kararsız (SE >> band) aday, ortalaması bantta olsa da 1-SE'ye girmez."""
+    reports = [
+        make_report("stat_a", smape=11.5, se=0.5),    # en iyi, kararlı
+        make_report("stat_b", smape=11.8, se=0.5),    # bantta, kararlı
+        make_report("lightgbm", smape=11.9, se=3.0),  # ortalama bantta AMA SE = 3.0 (2·band'ı aşar)
+    ]
+    cands = [
+        _cand("stat_a", "statistical"), _cand("stat_b", "statistical"), _cand("lightgbm", "gbdt"),
+    ]
+    sel = score_reports(reports, cands, _cfg(), _TASK, make_profile())
+    assert "lightgbm" not in sel.champion.within_1se  # kararsız → dışlandı
+    assert sel.champion.model_key in {"stat_a", "stat_b"}
+
+
 def test_best_rule_picks_lowest_metric() -> None:
     reports = [make_report("a", smape=10.0, se=2.0), make_report("b", smape=10.8, se=2.0)]
     cands = [_cand("a", "gbdt"), _cand("b", "linear")]
