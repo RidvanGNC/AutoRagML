@@ -32,3 +32,8 @@ scratch_bench/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# pytorch_tabular / pytorch-lightning eğitim çıktıları (ADR 0031 — CWD'ye yazar)
+/lightning_logs/
+/.pt_tmp/
+/saved_models/

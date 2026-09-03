@@ -62,6 +62,8 @@ def load_catalog(override_paths: list[Path] | None = None) -> JsonDict:
 
 
 def _class_exists(class_path: str) -> bool:
+    if class_path.startswith("__") and class_path.endswith("__"):
+        return True  # sentinel (ör. __neural_arch__) — build_estimator özel işler
     module_path, _, class_name = class_path.rpartition(".")
     if not module_path or not class_name:
         return False

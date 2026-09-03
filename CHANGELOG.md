@@ -9,6 +9,22 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 ## [Unreleased]
 
 ### Eklendi (v1.1)
+- **Nöral mimari arama** (ADR 0031) — `[neural-nas]` extra: `pytorch-tabular`. `neural_search=True`
+  ile iki aşama: **A)** aile taraması (MLP · GANDALF · FT-Transformer, kısa epoch) → en iyi ≤2 aile ·
+  **B)** kazanan ailede koşullu mimari+HP arama (`n_layers` → `layer_width`/`residual`/`activation`/
+  `dropout`/`lr`...), Successive Halving (epoch = fidelity). `small`/`full` uzay.
+  - `models/neural_arch.py::TabularModelEstimator` (sklearn-uyumlu `TabularModel` sarımı).
+  - `SearchDim.condition` (additive) — aile-özel HP'ler (`{"param":"family","eq":"gandalf"}`).
+  - `fine_tuners/arch_search.py::ArchitectureSearchTuner` (Tuner protokolü, nested CV korunur;
+    `neural_arch_search` dışı adayları fallback tuner'a devreder). `neural_search_budget_seconds`.
+  - Serving: `persistence.bundle` `champion_neural/` sidecar (`TabularModel` joblib-picklable değil).
+  - `neural_arch_search` yalnız `neural_search=True` + GPU/satır kapısı; RealMLP-default + GBDT
+    havuzda kalır → arama bulamazsa GES güçlü default'a döner (regresyon garantisi).
+  - Nöral aileler artık şampiyon refit'te **bagging yok** (tek-model — bagging pahalı).
+  - `ArchitectureSearchTuner._cache`: arama dış CV fold başına DEĞİL bir kez koşar (sonraki
+    fold'lar aynı mimariyi değerlendirir — Auto-PyTorch deseni, sızıntı yok).
+  - **Doğrulandı (RTX 4060):** 3 aile fit/predict · bundle sidecar round-trip · e2e'de
+    `neural_arch_search` leaderboard'da (küçük veride default'ları geçmedi — GES doğru modeli seçti).
 - **Nöral tablo katmanı** (ADR 0030) — `[neural]` extra: `pytabkit` + `torch`. Katalog:
   `real_mlp` (RealMLP-TD, meta-tune edilmiş güçlü default), `tab_m` (TabM, MLP ansamblı),
   `real_tab_r` (RealTabR). Yeni engine yok — sklearn arayüzlü katalog girişleri.

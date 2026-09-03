@@ -1,0 +1,6 @@
+# Nöral mimari arama — küçük uzay (ADR 0031). Hızlı: ~30-60 konfig.
+# ArchitectureSearchTuner Aşama B'de kazanan aile üzerinde örnekler.
+n_layers:      {type: int, low: 1, high: 4}
+layer_width:   {type: categorical, choices: [64, 128, 256, 512]}
+dropout:       {type: float, low: 0.0, high: 0.4}
+learning_rate: {type: loguniform, low: 0.0001, high: 0.01}

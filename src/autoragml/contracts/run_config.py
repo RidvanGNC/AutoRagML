@@ -167,6 +167,11 @@ class RunConfig(Contract):
     neural_min_rows: int = Field(default=500, ge=1)  # altında nöral aday atlanır
     neural_max_rows: int | None = Field(default=None, ge=1)  # üstünde atlanır (GPU'da 4× esner)
 
+    # --- nöral mimari arama (ADR 0031) — `[neural-nas]` extra; yalnız açık bayrak ---
+    neural_search: bool = False  # aile taraması → kazanan ailede derin mimari+HP arama
+    neural_search_space: Literal["small", "full"] = "small"
+    neural_search_budget_seconds: int | None = Field(default=None, ge=1)  # yoksa 3600s tavan
+
     @model_validator(mode="after")
     def _post_checks(self) -> RunConfig:
         if self.task_hint is Task.FORECASTING and self.time_col is None:

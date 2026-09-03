@@ -38,6 +38,7 @@ explain    = ["shap>=0.44"]
 neural     = ["pytabkit>=1.7", "torch>=2.2"]   # ADR 0030: RealMLP + TabM (sklearn wrapper).
                                               # CUDA: pip install torch --index-url https://download.pytorch.org/whl/cu124
                                               # RealTabR ek: pip install skorch faiss-cpu
+neural-nas = ["pytorch-tabular>=1.1"]          # ADR 0031: mimari arama (aile taraması + derin arama)
 # neural-nas = ["pytorch-tabular>=1.1"]      # ADR 0031: mimari arama (henüz yazılmadı)
 
 # LLM sağlayıcıları (v2 RAG/agent katmanı için — çekirdek bunlara bağlı değil)
@@ -93,7 +94,7 @@ plugins = ["pydantic.mypy"]
 [[tool.mypy.overrides]]
 module = [
     "pyarrow.*", "sklearn.*", "scipy.*", "joblib.*", "mlflow.*", "matplotlib.*",
-    "torch.*", "pytabkit.*", "pytorch_tabular.*",
+    "torch.*", "pytabkit.*", "pytorch_tabular.*", "omegaconf.*",
 ]
 ignore_missing_imports = true
 

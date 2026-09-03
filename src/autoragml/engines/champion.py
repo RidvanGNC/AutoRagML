@@ -315,6 +315,7 @@ def refit_champion(
     fit = _fit_pipeline(
         candidate, report, work, plan, profile, task, config, tuner,
         with_postproc=True, pre_transform=pre_transform,
+        want_bag=candidate.family != "neural",  # ADR 0030/0031: nöral tek-model refit (bagging pahalı)
     )
     champ_row = next((r for r in selection.scoreboard.rows if r.model_key == key), None)
     ensemble_meta: dict[str, object] = (

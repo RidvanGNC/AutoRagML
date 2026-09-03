@@ -47,6 +47,9 @@ def _load_class(class_path: str) -> type[Any]:
         raise EstimatorBuildError(msg) from exc
 
 
+_NEURAL_ARCH = "__neural_arch__"
+
+
 def build_estimator(
     candidate: Candidate,
     task: Task,
@@ -54,6 +57,12 @@ def build_estimator(
 ) -> Any:
     """Bir aday + task + (opsiyonel) HPO paramları → fit edilmemiş estimator."""
     class_path = resolve_class_path(candidate.class_path, task)
+    if class_path == _NEURAL_ARCH:  # ADR 0031: pytorch_tabular mimari arama sarımı
+        from autoragml.models.neural_arch import TabularModelEstimator
+
+        merged = {**candidate.default_params, **(params or {})}
+        merged["task_kind"] = "regression" if task in _REGRESSION_TASKS else "classification"
+        return TabularModelEstimator(**merged)
     cls = _load_class(class_path)
     merged = {**candidate.default_params, **(params or {})}
     try:

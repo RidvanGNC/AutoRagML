@@ -90,7 +90,12 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
 - **nöral (ADR 0030, `[neural]`):** `neural.yaml` `real_mlp`/`tab_m`/`real_tab_r` (pytabkit sklearn).
   `torch_env.configure_torch` (seed+determinizm, idempotent) · `neural_gate.prepare_neural_candidates`
   (çalışma-zamanı kapısı: `neural_enabled` auto/on/off × GPU × satır bandı; pytabkit varsa `mlp` düşer).
-  `core.run_core_pipeline` çağırır. FT-Transformer + mimari arama → ADR 0031.
+  `core.run_core_pipeline` çağırır.
+- **nöral mimari arama (ADR 0031, `[neural-nas]`):** `neural_search=True` → `neural_arch_search`
+  adayı (`class_path: __neural_arch__` → `neural_arch.TabularModelEstimator`, pytorch_tabular).
+  `fine_tuners/arch_search.ArchitectureSearchTuner` — Aşama A aile taraması + Aşama B SH (koşullu
+  uzay `_spaces/neural_arch_{small,full}.yaml`, `SearchDim.condition`). `resolve_tuner` heterojen.
+  Serving `persistence.bundle` `champion_neural/` sidecar. Nöral aile → şampiyon bagging yok.
 
 ## fine_tuners/  (ADR 0013 — ensemble-öncelikli, multi-fidelity, KOD YAZILDI)
 - **Girdi:** `validators.Tuner` protokolü (candidate + dış-fold train frame + plan + config)

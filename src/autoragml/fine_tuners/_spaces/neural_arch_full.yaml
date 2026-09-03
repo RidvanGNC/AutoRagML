@@ -1,0 +1,13 @@
+# Nöral mimari arama — tam uzay (ADR 0031). SOTA hedefi: ~100-200 konfig.
+n_layers:            {type: int, low: 1, high: 5}
+layer_width:         {type: categorical, choices: [64, 128, 256, 512, 1024]}
+layer_width_scaling: {type: categorical, choices: [const, pyramid, funnel]}
+dropout:             {type: float, low: 0.0, high: 0.5}
+activation:          {type: categorical, choices: [ReLU, GELU, Mish, LeakyReLU]}
+normalization:       {type: categorical, choices: [batch, none]}
+learning_rate:       {type: loguniform, low: 0.0001, high: 0.01}
+weight_decay:        {type: loguniform, low: 0.000001, high: 0.01}
+batch_size:          {type: categorical, choices: [256, 512, 1024]}
+# aile-özel (koşullu — ADR 0031 SearchDim.condition)
+gflu_stages:         {type: int, low: 2, high: 12, condition: {param: family, eq: gandalf}}
+n_heads:             {type: categorical, choices: [4, 8], condition: {param: family, eq: ft_transformer}}

@@ -42,3 +42,16 @@ real_tab_r:
   requires: [pytabkit, skorch, faiss]   # RealTabR skorch + faiss'e bağlı (opt-in-opt-in):
                                         # pip install skorch faiss-cpu
   default_params: {random_state: 42, n_cv: 1}
+
+neural_arch_search:
+  name: Neural Architecture Search
+  family: neural
+  class_path: __neural_arch__           # models.estimator → TabularModelEstimator (ADR 0031)
+  modalities: [tabular]                 # forecasting reduction → v1.1
+  tasks: [regression, binary_classification, multiclass_classification]
+  predict_kind: [point, proba]
+  requires: [pytorch_tabular]
+  fidelity: max_epochs                  # SH ekseni (ArchitectureSearchTuner)
+  # Yalnız RunConfig.neural_search=True iken havuza girer (neural_gate). Arama uzayını
+  # fine_tuners/_spaces/neural_arch_{small,full}.yaml'dan ArchitectureSearchTuner yükler.
+  default_params: {max_epochs: 120, seed: 42}

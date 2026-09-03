@@ -20,6 +20,9 @@ class SearchDim(Contract):
     high: float | None = None
     choices: list[object] | None = None
     step: float | None = None
+    # Koşullu HP (ADR 0031): {"param": <ad>, "eq"|"ne"|"ge"|"in": <değer>} — koşul sağlanmazsa
+    # bu boyut örneklenmez (nöral mimari aramada aile-özel HP'ler için).
+    condition: dict[str, object] | None = None
 
 
 class Candidate(Contract):

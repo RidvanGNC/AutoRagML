@@ -145,13 +145,45 @@ save/load dallanması (additive).
 - **Nöral forecasting mimari araması** → ADR 0032 (neuralforecast) sonrası ayrı değerlendirme.
 - **Auto-PyTorch backend / BOHB / cross-table portföyler** → v1.2 (ağır, kendi CV'si bizimkiyle çakışır).
 
-## Sonuç (implementasyon planı — ADR kabul sonrası)
+## Sonuç (UYGULANDI — commit [pending], 2026-09-03)
 
-1. `pyproject` `neural-nas` extra + mypy override.
-2. `SearchDim.condition` + `fine_tuners/space.py` koşul değerlendirme (+ mevcut test'ler bozulmaz).
-3. `configs/search_spaces/neural_arch_{small,full}.yaml` + `neural_families.yaml`.
-4. `fine_tuners/arch_search.py` — `ArchitectureSearchTuner` (Aşama A sweep + Aşama B SH).
-5. `fine_tuners/resolve_tuner` heterojen: `neural_search` iken nöral adaylara `ArchitectureSearchTuner`.
+- `models/neural_arch.py::TabularModelEstimator` — sklearn-uyumlu `pytorch_tabular.TabularModel`
+  sarımı (`fit(X,y)`/`predict`/`predict_proba`/`save`/`load`). Aileler: `mlp`
+  (`CategoryEmbeddingModelConfig`), `gandalf` (`GANDALFConfig`), `ft_transformer`
+  (`FTTransformerConfig`). `_layer_widths` (const/pyramid/funnel). Kendi train/val split'i + ES.
+- `models/estimator.build_estimator`: `class_path == "__neural_arch__"` → `TabularModelEstimator`
+  (`task_kind` enjekte).
+- `models/catalog/neural.yaml` `neural_arch_search` (`fidelity: max_epochs`, `requires: [pytorch_tabular]`).
+- `contracts/candidate.SearchDim.condition` (additive) + `fine_tuners/space.sample_params` iki-tur
+  koşullu örnekleme (`eq`/`ne`/`ge`/`in`).
+- `fine_tuners/_spaces/neural_arch_{small,full}.yaml`.
+- `fine_tuners/arch_search.py::ArchitectureSearchTuner` — Aşama A (3 aile × `_SWEEP_EPOCHS=20`) →
+  en iyi ≤2; Aşama B (`_n_configs` 12/24 × SH `build_schedule`, budget kill). `_ARCH_KEY` dışı →
+  `fallback` tuner. Nested CV korunur (`evaluate_trial` yeniden kullanımı → `build_estimator` routing).
+- `fine_tuners.resolve_tuner`: `neural_search` → `make_arch_tuner(config, base)`.
+- `models/neural_gate.prepare_neural_candidates`: `neural_arch_search` yalnız `neural_search=True` +
+  GPU/satır kapısı.
+- `engines/champion._fit_pipeline(want_bag=candidate.family != "neural")` — nöral tek-model refit.
+- `persistence/bundle`: `_NEURAL_DIR` sidecar — `save_bundle` `TabularModelEstimator`'ı dizine yazar,
+  pickle'da `None`; `load_bundle` `.load()` ile geri koyar. `neural_sidecar` bayrağı payload'da.
+- `pyproject` `neural-nas` extra + mypy override (`omegaconf.*`).
+- `tests/unit/fine_tuners/test_arch_search.py` (koşullu uzay, tuner çözümleme, delege).
+
+### GPU e2e doğrulaması (RTX 4060, 2026-09-03) ✅
+
+- `test_neural_arch.py` (6): 3 aile (mlp/gandalf/ft_transformer) fit+predict GPU'da · `build_estimator`
+  routing · `_layer_widths` (const/pyramid/funnel) · **bundle sidecar round-trip** (save→load→predict
+  eşleşiyor, `champion_neural/` dizini).
+- Uçtan uca (`neural_search=True`, küçük sentetik): `neural_arch_search` **çalıştı + leaderboard'da**
+  (RMSE 0.742). Şampiyon `tab_m` (0.572) — arama küçük veri + dar bütçede ADR 0030 default'larını
+  geçemedi; **GES/1-SE daha iyi modeli tuttu (regresyon garantisi çalıştı)**.
+- **Cache kritik:** ilk implementasyonda arama her dış CV fold'unda tekrar koşuyordu (175+ nöral fit
+  runaway). `ArchitectureSearchTuner._cache` → arama bir kez (ilk fold), sonraki fold'lar aynı
+  mimariyi değerlendirir (Auto-PyTorch deseni, sızıntı yok).
+- **Maliyet notu:** lightning per-fit kurulum maliyeti küçük veride baskın (~10dk). Gerçek fayda
+  büyük veri + gerçek bütçe (`neural_search_budget_seconds` vars. 3600s) ile.
+
+### Eski plan (referans)
 6. `pytorch_tabular` wrapper (`models/neural_arch.py`?) — config→`TabularModel`, `FittedNeuralArchPipeline`.
 7. `persistence.bundle` `_NEURAL_DIR` save/load dallanması.
 8. `RunConfig` alanları + `resolve_run_config`.

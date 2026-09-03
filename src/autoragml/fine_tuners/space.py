@@ -43,9 +43,51 @@ def sample_value(dim: SearchDim, rng: np.random.Generator) -> Any:
     raise SpaceError(msg)
 
 
+def _condition_met(condition: dict[str, object], sampled: dict[str, Any]) -> bool:
+    """`{"param": ad, "eq"|"ne"|"ge"|"in": değer}` — koşul sağlandı mı (ADR 0031)."""
+    param = condition.get("param")
+    if not isinstance(param, str) or param not in sampled:
+        return False
+    val = sampled[param]
+    if "eq" in condition:
+        return bool(val == condition["eq"])
+    if "ne" in condition:
+        return bool(val != condition["ne"])
+    if "ge" in condition:
+        try:
+            return bool(val >= condition["ge"])
+        except TypeError:
+            return False
+    if "in" in condition:
+        allowed = condition["in"]
+        return isinstance(allowed, (list, tuple, set)) and val in allowed
+    return False
+
+
 def sample_params(search_space: dict[str, SearchDim], rng: np.random.Generator) -> dict[str, Any]:
-    """Tüm arama uzayından bir konfigürasyon örnekle."""
-    return {name: sample_value(dim, rng) for name, dim in search_space.items()}
+    """Bir konfigürasyon örnekle. Koşullu boyutlar (ADR 0031) sonra — koşul sağlanmazsa atlanır."""
+    out: dict[str, Any] = {}
+    pending: list[tuple[str, SearchDim]] = []
+    for name, dim in search_space.items():
+        if dim.condition:
+            pending.append((name, dim))
+        else:
+            out[name] = sample_value(dim, rng)
+    for _ in range(len(pending) + 1):  # koşul zincirleri için birkaç geçiş
+        progressed = False
+        for name, dim in list(pending):
+            assert dim.condition is not None
+            cond_param = dim.condition.get("param")
+            if _condition_met(dim.condition, out):
+                out[name] = sample_value(dim, rng)
+                pending.remove((name, dim))
+                progressed = True
+            elif isinstance(cond_param, str) and cond_param in out:  # değerlendirildi, sağlanmadı
+                pending.remove((name, dim))
+                progressed = True
+        if not progressed:
+            break
+    return out
 
 
 def sample_candidate_choices(

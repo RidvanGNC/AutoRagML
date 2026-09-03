@@ -18,14 +18,20 @@ from autoragml.models.torch_env import has_cuda
 logger = get_logger(__name__)
 
 _PYTABKIT = "pytabkit"
+_ARCH_KEY = "neural_arch_search"
 
 
 def prepare_neural_candidates(
     candidates: list[Candidate], profile: DataProfile, config: RunConfig
 ) -> list[Candidate]:
     """Nöral adayları çalışma-zamanı kapısından geçir; `mlp` çakışmasını çöz; cihazı enjekte et."""
+    # ADR 0031: mimari arama adayı yalnız neural_search=True iken havuzda
+    if not config.neural_search:
+        candidates = [c for c in candidates if c.key != _ARCH_KEY]
+
     torch_neural = [c for c in candidates if _PYTABKIT in c.requires]
-    if not torch_neural:
+    arch = [c for c in candidates if c.key == _ARCH_KEY]
+    if not torch_neural and not arch:
         return candidates
 
     gpu = has_cuda()
@@ -41,7 +47,7 @@ def prepare_neural_candidates(
         hi = hi * 4
     row_ok = n_rows >= lo and (hi is None or n_rows <= hi)
 
-    dropped = {c.key for c in torch_neural}
+    dropped = {c.key for c in [*torch_neural, *arch]}
     if not (active and row_ok):
         reason = (
             "GPU yok / neural_enabled!=on" if not active else f"n_rows={n_rows} bant [{lo}, {hi}] dışı"
@@ -49,15 +55,17 @@ def prepare_neural_candidates(
         logger.info("[neural] adaylar atlandı (%s): %s", reason, sorted(dropped))
         return [c for c in candidates if c.key not in dropped]
 
+    has_pytabkit = bool(torch_neural)
     logger.info(
-        "[neural] %s havuzda (GPU=%s, n_rows=%d); sklearn `mlp` düşürüldü", sorted(dropped), gpu, n_rows
+        "[neural] %s havuzda (GPU=%s, n_rows=%d)%s",
+        sorted(dropped), gpu, n_rows, "; sklearn `mlp` düşürüldü" if has_pytabkit else "",
     )
     device = config.neural_device
     out: list[Candidate] = []
     for c in candidates:
-        if c.key == "mlp":
+        if c.key == "mlp" and has_pytabkit:
             continue  # RealMLP/TabM havuzdayken sklearn MLP gereksiz
-        if _PYTABKIT in c.requires and device != "auto":
+        if (_PYTABKIT in c.requires or c.key == _ARCH_KEY) and device != "auto":
             out.append(c.model_copy(update={"default_params": {**c.default_params, "device": device}}))
         else:
             out.append(c)

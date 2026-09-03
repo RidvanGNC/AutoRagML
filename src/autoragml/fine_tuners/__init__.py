@@ -39,12 +39,24 @@ __all__ = [
 
 
 def resolve_tuner(config: RunConfig) -> Tuner:
-    """`RunConfig.hpo_level` + `hpo_backend` → hazır `Tuner`."""
+    """`RunConfig.hpo_level` + `hpo_backend` → hazır `Tuner`.
+
+    `neural_search=True` (ADR 0031): nöral `neural_arch_search` adayına mimari arama, diğer
+    adaylara aşağıdaki tuner (heterojen — `ArchitectureSearchTuner` içeride devreder).
+    `hpo_level=none` iken bile mimari arama koşar (kullanıcı açıkça istedi).
+    """
     if config.hpo_level is HpoLevel.NONE:
-        return DefaultTuner()
-    # ADR 0022: tek iç fold → yüksek varyanslı config seçimi (val'a aşırı-uyum).
-    # `light` bile en az 2 iç fold kullanır; `thorough` 3.
-    inner_folds = 2 if config.hpo_level is HpoLevel.LIGHT else 3
-    if config.hpo_backend is HpoBackend.OPTUNA:
-        return OptunaTuner(inner_folds=inner_folds)
-    return RandomSearchTuner(inner_folds=inner_folds)
+        base: Tuner = DefaultTuner()
+    else:
+        # ADR 0022: tek iç fold → yüksek varyanslı config seçimi. `light` ≥2 fold, `thorough` 3.
+        inner_folds = 2 if config.hpo_level is HpoLevel.LIGHT else 3
+        base = (
+            OptunaTuner(inner_folds=inner_folds)
+            if config.hpo_backend is HpoBackend.OPTUNA
+            else RandomSearchTuner(inner_folds=inner_folds)
+        )
+    if config.neural_search:
+        from autoragml.fine_tuners.arch_search import make_arch_tuner
+
+        return make_arch_tuner(config, base)
+    return base

@@ -25,6 +25,13 @@ _FORMAT_VERSION = 1
 _ENV_PACKAGES = ("scikit-learn", "lightgbm", "numpy", "scipy", "pandas")
 _VERSION_SENSITIVE = ("scikit-learn", "lightgbm")
 _load_security_warned = False
+_NEURAL_DIR = "champion_neural"  # ADR 0031: pytorch_tabular model dizini (joblib yanı sıra)
+
+
+def _neural_estimator(pipeline: Any) -> Any | None:
+    """Pipeline'ın (tek-model) `TabularModelEstimator`'ını bul — yoksa None (ADR 0031)."""
+    est = getattr(pipeline, "_estimator", None)
+    return est if type(est).__name__ == "TabularModelEstimator" else None
 
 
 def _env_snapshot() -> dict[str, str]:
@@ -62,6 +69,16 @@ def save_bundle(bundle: ModelBundle, path: str | Path, *, compress: int = 3) -> 
         raise PersistenceError(msg)
     dest = Path(path)
     dest.parent.mkdir(parents=True, exist_ok=True)
+
+    # ADR 0031: nöral mimari arama şampiyonu — TabularModel joblib-picklable değil.
+    # Estimator'ı sidecar dizine yaz, pickle'da None bırak, yüklemede geri koy.
+    neural_est = _neural_estimator(bundle.pipeline)
+    neural_saved = False
+    if neural_est is not None:
+        neural_est.save(dest.parent / _NEURAL_DIR)
+        bundle.pipeline._estimator = None  # noqa: SLF001
+        neural_saved = True
+
     payload: dict[str, Any] = {
         "format_version": _FORMAT_VERSION,
         "autoragml_version": __version__,
@@ -70,12 +87,16 @@ def save_bundle(bundle: ModelBundle, path: str | Path, *, compress: int = 3) -> 
         "metrics_oof": dict(bundle.metrics_oof),
         "metrics_holdout": dict(bundle.metrics_holdout),
         "pipeline": bundle.pipeline,
+        "neural_sidecar": neural_saved,
     }
     try:
         joblib.dump(payload, dest, compress=compress)
     except Exception as exc:  # noqa: BLE001
         msg = f"bundle serialize edilemedi ({dest}): {exc}"
         raise PersistenceError(msg) from exc
+    finally:
+        if neural_saved:
+            bundle.pipeline._estimator = neural_est  # noqa: SLF001 - bellekteki bundle sağlam kalsın
     return dest
 
 
@@ -107,10 +128,21 @@ def load_bundle(path: str | Path) -> ModelBundle:
     md = payload["metadata"]
     if not isinstance(md, BundleMetadata):
         md = BundleMetadata(**md)
+
+    pipeline = payload.get("pipeline")
+    if payload.get("neural_sidecar") and pipeline is not None:  # ADR 0031
+        from autoragml.models.neural_arch import TabularModelEstimator
+
+        neural_dir = src.parent / _NEURAL_DIR
+        if not neural_dir.is_dir():
+            msg = f"nöral sidecar dizini yok: {neural_dir}"
+            raise PersistenceError(msg)
+        pipeline._estimator = TabularModelEstimator().load(neural_dir)  # noqa: SLF001
+
     return ModelBundle(
         metadata=md,
         metrics_oof=payload.get("metrics_oof", {}),
         metrics_holdout=payload.get("metrics_holdout", {}),
         artifact_path=str(src),
-        pipeline=payload.get("pipeline"),
+        pipeline=pipeline,
     )
