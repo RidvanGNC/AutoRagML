@@ -85,20 +85,19 @@ def _rank_value(row: ScoreRow, lower: bool) -> float:
 
 
 def _within_one_se(pool: list[ScoreRow], best: ScoreRow, noise_floor: float, lower: bool) -> list[ScoreRow]:
-    """1-SE bandı — **aday-başı** SE (ADR 0035/K3): `best` ve aday'ın kendi SE'sinin (ve
-    `noise_floor` tabanının) büyüğü kadar tolerans. Heterojen OOF ızgaralarında (klasik cutoff
-    vs reduction fold) tek medyan-SE yanlış üye seçiyordu."""
+    """1-SE bandı: en iyinin `max(best.SE, noise_floor)` toleransı içindekiler.
+
+    Not (ADR 0035/K3 GERİ ALINDI): "aday-başı SE" (`max(best.se, r.se)`) yüksek-varyanslı
+    bir adayın kendi SE'siyle bandı şişirip kendini içeri almasına yol açtı (m3 benchmark:
+    `elastic_net` se=5.16 → smape 17.1'i 11.9 bandına soktu → şampiyon oldu). Klasik 1-SE:
+    band **yalnız en iyi modelin** SE'si (medyan-SE tabanıyla)."""
+    band = max(best.oof_metric_se, noise_floor)
+    if band <= 0:
+        return [best]
     b = best.oof_metric_mean
-    within: list[ScoreRow] = []
-    for r in pool:
-        band = max(best.oof_metric_se, r.oof_metric_se, noise_floor)
-        if band <= 0:
-            if r.model_key == best.model_key:
-                within.append(r)
-            continue
-        if (lower and r.oof_metric_mean <= b + band) or (not lower and r.oof_metric_mean >= b - band):
-            within.append(r)
-    return within or [best]
+    if lower:
+        return [r for r in pool if r.oof_metric_mean <= b + band]
+    return [r for r in pool if r.oof_metric_mean >= b - band]
 
 
 def select_champion(
@@ -122,19 +121,15 @@ def select_champion(
     within = _within_one_se(pool_sorted, best, noise_floor, lower)
 
     if config.selection_rule is SelectionRule.ONE_STD_ERR:
-        # ADR 0035/K3: basitlik → robustluk (çok fold + düşük SE) → süre.
+        # Basitlik (aile karmaşıklığı) → süre. (ADR 0035/K3 `-n_folds` tie-break GERİ ALINDI —
+        # klasik 3-pencere ↔ reduction 5-fold arası haksız ceza; m3'te auto_ets → elastic_net flip.)
         champ = min(
             within,
-            key=lambda r: (
-                _FAMILY_COMPLEXITY.get(r.family, 3),
-                -r.n_folds,
-                r.oof_metric_se,
-                r.realized_seconds,
-            ),
+            key=lambda r: (_FAMILY_COMPLEXITY.get(r.family, 3), r.realized_seconds),
         )
         reason = (
-            f"1-SE kuralı: en iyinin ~{noise_floor:.3g} SE'si içindeki {len(within)} adaydan "
-            f"en basit/robust ({champ.family}, {champ.n_folds} fold)"
+            f"1-SE kuralı: en iyinin ~{max(best.oof_metric_se, noise_floor):.3g} SE'si içindeki "
+            f"{len(within)} adaydan en basiti ({champ.family})"
         )
     else:
         champ = best

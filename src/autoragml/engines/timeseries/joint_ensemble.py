@@ -86,6 +86,12 @@ class FittedJointForecaster:
         return list(dict.fromkeys(cols))
 
 
+def _keyed(gcol_vals: np.ndarray, ds_vals: np.ndarray) -> np.ndarray:
+    left = pd.Series(gcol_vals).astype(str)
+    right = pd.to_datetime(pd.Series(ds_vals)).astype(str)
+    return (left + "|" + right).to_numpy()
+
+
 def _reduction_cutoff_oof(
     cand: Candidate,
     choices: dict[str, str],
@@ -98,56 +104,61 @@ def _reduction_cutoff_oof(
     h: int,
     season: int,
 ) -> _Arr | None:
-    """`cand`'ı her cutoff için `train ≤ cutoff`'ta fit + o pencereyi predict → `cv` sırasında OOF."""
+    """`cand`'ı **pencere indeksi başına** (klasik `_win`) leakage-safe değerlendir → `cv` OOF.
+
+    Heterojen panelde cutoff'lar seriye göre değişir → tarih başına değil, pencere başına
+    grupla: her seri kendi w'inci cutoff'una kadar train edilir (per-seri kesme), tek model
+    tüm panelde fit, her serinin w'inci penceresi predict edilir. `build_reduction_features`
+    `shift ≥ h` → hedef satırlar yalnız kendi cutoff'undan önceki `y`'yi görür.
+    """
     from autoragml.engines.champion import _ctx, _fit_one
 
     gcol, tcol, tgt = task.group_col, task.time_col or "ds", task.targets[0]
+    if not gcol:
+        return None  # joint yalnız panel forecasting (klasik CV panel bazlı)
     ctx = _ctx(task, profile, config)
     red_partial = functools.partial(_reduce_only, task=task, horizon=h, season=season)
-    ts = pd.to_datetime(raw_frame[tcol], errors="coerce")
+    raw = raw_frame.copy()
+    raw[tcol] = pd.to_datetime(raw[tcol], errors="coerce")
+    raw_g = raw[gcol].astype(str)
 
     out = np.full(len(cv), np.nan, dtype=np.float64)
-    for cut_key, block in cv.groupby("cutoff", sort=True):
-        cut = pd.to_datetime(cut_key)  # type: ignore[arg-type]
-        train_c = raw_frame[ts <= cut]
-        too_small = train_c[gcol].nunique() < 2 if gcol else len(train_c) < 3 * max(h, 1)
-        if too_small:
-            return None
+    for win, block in cv.groupby("_win", sort=True):
+        cut_by_uid = (
+            block.groupby(block["unique_id"].astype(str))["cutoff"]
+            .first().apply(pd.Timestamp).to_dict()
+        )
+        parts = [
+            raw[(raw_g == uid) & (raw[tcol] <= cut)] for uid, cut in cut_by_uid.items()
+        ]
+        train_c = pd.concat([p for p in parts if not p.empty], ignore_index=True)
+        if train_c[gcol].nunique() < 2:
+            continue
+        pred_rows = pd.DataFrame({
+            gcol: block["unique_id"].to_numpy(),
+            tcol: pd.to_datetime(block["ds"]).to_numpy(),
+            tgt: np.nan,
+        })
         try:
             aug_c = build_reduction_features(train_c, task, horizon=h, season=season)[0]
             fitted, _ = _fit_one(
                 cand, choices, {}, aug_c, plan, task, config, ctx,
                 fixed_iter=None, pre_transform=red_partial,
             )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("[joint] `%s` cutoff=%s fit başarısız: %s", cand.key, cut, exc)
-            return None
-
-        pred_rows = pd.DataFrame({
-            gcol: block["unique_id"].to_numpy() if gcol else "series",
-            tcol: pd.to_datetime(block["ds"]).to_numpy(),
-            tgt: np.nan,
-        })
-        if not gcol:
-            pred_rows = pred_rows.drop(columns=[c for c in pred_rows.columns if c not in {tcol, tgt}])
-        predict_frame = pd.concat([train_c, pred_rows], ignore_index=True)
-        try:
+            predict_frame = pd.concat([train_c, pred_rows], ignore_index=True)
             preds_all = np.asarray(fitted.predict(predict_frame), dtype=np.float64)
             sorted_frame = red_partial(predict_frame)
         except Exception as exc:  # noqa: BLE001
-            logger.warning("[joint] `%s` cutoff=%s predict başarısız: %s", cand.key, cut, exc)
+            logger.warning("[joint] `%s` pencere %s başarısız: %s", cand.key, win, exc)
             return None
         if len(preds_all) != len(sorted_frame):
             return None
-        g_key = (
-            sorted_frame[gcol].astype(str) if gcol else pd.Series(["series"] * len(sorted_frame))
+        s = pd.Series(
+            preds_all,
+            index=_keyed(sorted_frame[gcol].to_numpy(), sorted_frame[tcol].to_numpy()),
         )
-        key = g_key.to_numpy().astype(object) + "|" + pd.to_datetime(sorted_frame[tcol]).astype(str).to_numpy()
-        s = pd.Series(preds_all, index=key)
         s = s[~s.index.duplicated(keep="last")]
-        tgt_key = block["unique_id"].astype(str).to_numpy().astype(object) + "|" + pd.to_datetime(
-            block["ds"]
-        ).astype(str).to_numpy()
+        tgt_key = _keyed(block["unique_id"].to_numpy(), block["ds"].to_numpy())
         out[block.index.to_numpy()] = s.reindex(tgt_key).to_numpy(dtype=np.float64)
 
     return out if not np.isnan(out).any() else None

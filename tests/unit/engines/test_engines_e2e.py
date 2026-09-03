@@ -37,8 +37,11 @@ def _panel_df() -> pd.DataFrame:
 
 
 def _prep(df: pd.DataFrame, **over: object):
+    # nöral/foundation adayları kuruluysa auto-modda havuza girer ve şampiyon olabilir;
+    # bu e2e testleri klasik/reduction/recursive/segmented mantığını izole eder (nöral için ayrı dosyalar).
     cfg = resolve_run_config(
-        target="y", overrides={"hpo_level": "none", **over}
+        target="y",
+        overrides={"hpo_level": "none", "neural_enabled": "off", "foundation_enabled": "off", **over},
     ).config
     ds = load_dataset(df, cfg)
     profile, task = analyze(ds, cfg)

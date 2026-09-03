@@ -107,9 +107,10 @@ def configure_torch(seed: int, mode: DeterminismMode = "best_effort", device: st
     torch.manual_seed(seed)
     if has_cuda():
         torch.cuda.manual_seed_all(seed)
-        # Tensor Core'lu GPU'larda (RTX 40xx) matmul hızlandırması — determinizmi bozmaz
-        with contextlib.suppress(Exception):
-            torch.set_float32_matmul_precision("high")
+        # NOT: `torch.set_float32_matmul_precision` (legacy API) çağrılmıyor — torch 2.14'te
+        # lightning/neuralforecast yeni API'yi kullanıyor; ikisi karışınca torch **hata veriyor**
+        # (m3 benchmark: `[neural_ts] cross_validation başarısız: mix of legacy and new APIs`).
+        # Tensor Core hızlandırmasını her kütüphane kendi trainer'ında ayarlasın.
 
     if mode != "off":
         torch.backends.cudnn.deterministic = True

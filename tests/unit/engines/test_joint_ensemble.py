@@ -76,6 +76,42 @@ def test_joint_ensemble_builds_across_families() -> None:
     assert np.isfinite(report.oof.y_pred).all()
 
 
+def test_joint_builds_on_heterogeneous_panel() -> None:
+    """Heterojen uzunluk/başlangıç — cutoff'lar seriye göre değişir; _win bazlı gruplama şart."""
+    rng = np.random.default_rng(7)
+    rows = []
+    for g in range(18):
+        length = int(rng.integers(48, 84))
+        start = pd.Timestamp("2015-01-01") + pd.DateOffset(months=int(rng.integers(0, 20)))
+        for i, ds in enumerate(pd.date_range(start, periods=length, freq="MS")):
+            rows.append({"unique_id": f"s{g}", "ds": ds,
+                         "y": 55 + g * 4 + 14 * np.sin(i / 12 * 6.28) + 0.3 * i + rng.normal(0, 2)})
+    df = pd.DataFrame(rows)
+    cfg = resolve_run_config(
+        target="y", overrides={"hpo_level": "none", "time_col": "ds", "group_col": "unique_id",
+                               "split_policy": {"horizon": 6}},
+    ).config
+    ds = load_dataset(df, cfg)
+    profile, task = analyze(ds, cfg)
+    frame = materialize_frame(ds)
+    aug, new_cols = build_reduction_features(frame, task, horizon=6, season=12)
+    from autoragml.analyzers.profiling import build_column_profiles
+    extra = build_column_profiles(aug[new_cols], target="y", thr=cfg.analyzers.thresholds, sampled=False)
+    profile = profile.model_copy(update={"columns": [*profile.columns, *extra]})
+    plan = build_plan(profile, task, cfg)
+    cands = resolve_candidates(cfg, task)
+    classical = [c for c in cands if is_classical(c)]
+    reduction = [c for c in cands if not is_classical(c) and c.family in {"gbdt", "forest", "linear"}]
+
+    _, _, cv_grid = run_classical_reports(frame, profile, task, cfg, classical)
+    assert cv_grid is not None
+    joint = build_joint_forecast_ensemble(frame, profile, task, cfg, plan, cv_grid, reduction)
+    assert joint is not None, "heterojen panelde joint kurulmalı (_win bazlı gruplama)"
+    _report, cand = joint
+    kinds = cand.default_params["member_kinds"]
+    assert "reduction" in set(kinds.values()) and "classical" in set(kinds.values())
+
+
 def test_joint_none_without_reduction() -> None:
     df, cfg, profile, task, frame, aug, plan = _prep()
     classical = [c for c in resolve_candidates(cfg, task) if is_classical(c)]
