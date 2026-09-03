@@ -101,6 +101,19 @@ def test_promotion_fails_on_smape() -> None:
     assert any("smape" in r for r in sel.promotion.reasons)
 
 
+def test_promotion_gate_follows_primary_metric() -> None:
+    """Bugfix: `smape_max` tavanı primary metriğe uygulanır (kesikli talepte sMAPE anlamsız)."""
+    reports = [make_report("a", smape=200.0, se=1.0)]  # make_report: wmape = smape*0.9 = 180
+    # primary=wmape → 180 > 35 → FAIL ama sebep wmape, smape değil
+    sel = score_reports(reports, [_cand("a")], _cfg(primary_metric="wmape"), _TASK, make_profile())
+    assert not sel.promotion.passed
+    assert any("wmape" in r for r in sel.promotion.reasons)
+    assert not any(r.startswith("smape") for r in sel.promotion.reasons)
+    # primary=rmse (yüzde metrik değil) → yüzde-hata tavanı hiç uygulanmaz
+    sel_rmse = score_reports(reports, [_cand("a")], _cfg(primary_metric="rmse"), _TASK, make_profile())
+    assert not any("smape" in r or "wmape" in r for r in sel_rmse.promotion.reasons)
+
+
 def test_promotion_passes() -> None:
     reports = [make_report("a", smape=12.0, se=1.0)]
     sel = score_reports(reports, [_cand("a")], _cfg(), _TASK, make_profile())

@@ -151,8 +151,14 @@ def _evaluate_promotion(
     reasons: list[str] = []
     m = champ.all_metrics_mean
 
-    if p.smape_max is not None and (v := m.get("smape")) is not None and v > p.smape_max:
-        reasons.append(f"smape {v:.2f} > {p.smape_max}")
+    # `smape_max` aslında bir "yüzde-hata tavanı" (ADR 0014, DemandSensing). Kesikli talepte sMAPE
+    # y≈0'da patlar → wMAPE koşumunda "smape 145 > 35" yanlış/anlamsız. Tavanı **primary metriğe**
+    # uygula (sMAPE-benzeri yüzde metrikler): sMAPE / wMAPE / MAPE. Diğer primary → tavan atlanır.
+    pct_metric = (config.primary_metric or "smape").lower()
+    if p.smape_max is not None and pct_metric in {"smape", "wmape", "mape"}:
+        v = m.get(pct_metric)
+        if v is not None and v > p.smape_max:
+            reasons.append(f"{pct_metric} {v:.2f} > {p.smape_max}")
     if p.abs_bias_max is not None and (v := m.get("abs_bias")) is not None and v > p.abs_bias_max:
         reasons.append(f"abs_bias {v:.2f} > {p.abs_bias_max}")
     if p.rmse_max is not None and (v := m.get("rmse")) is not None and v > p.rmse_max:

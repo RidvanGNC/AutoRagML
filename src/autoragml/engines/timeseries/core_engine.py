@@ -147,5 +147,6 @@ class TimeSeriesCoreEngine:
             self.key, frame, profile, task, config,
             tuner=tuner, messages=messages, pre_transform=None,
             run_classical=config.classical_forecasting,
+            run_neural_ts=config.neural_enabled != "off",  # ADR 0032
             recursive=True, recursive_season=season,
         )
