@@ -204,6 +204,29 @@ def run_segmented(
         pipeline=pipeline,
     )
 
+    segments_by_name = {s.name: s for s in plan.segments}
+
+    def _seg_finalize(full_frame: pd.DataFrame) -> ModelBundle:
+        """ADR 0035: her segment kendi `finalize`'ıyla full veride refit → birleşik pipeline."""
+        gcol_full = full_frame[gc].astype(str)
+        new_members: dict[str, Any] = {}
+        for name, er in per_seg.items():
+            seg = segments_by_name.get(name)
+            ids = set(seg.group_ids) if seg else set()
+            seg_full = full_frame[gcol_full.isin(ids)].reset_index(drop=True)
+            if er.finalize is not None and not seg_full.empty:
+                new_members[name] = er.finalize(seg_full).pipeline
+            else:
+                new_members[name] = er.champion.pipeline
+        return champion.model_copy(
+            update={
+                "pipeline": FittedSegmentedPipeline(
+                    members=new_members, group_to_seg=group_to_seg,
+                    fallback=fallback, group_col=gc,
+                )
+            }
+        )
+
     scoreboard = _combined_scoreboard(per_seg, sizes)
     promo_passed = all(er.selection.promotion.passed for er in per_seg.values())
     selection = SelectionResult(
@@ -235,5 +258,6 @@ def run_segmented(
         data_profile=profile,
         task_spec=task,
         adaptive_plan=plan,
+        finalize=_seg_finalize,
         messages=[f"segmented: {len(per_seg)} segment", *messages],
     )

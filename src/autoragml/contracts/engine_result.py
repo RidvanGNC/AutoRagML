@@ -1,6 +1,12 @@
-"""EngineResult — bir engine'in orchestrator'a döndürdüğü sonuç. DONDU (ADR 0015)."""
+"""EngineResult — bir engine'in orchestrator'a döndürdüğü sonuç. DONDU (ADR 0015).
+
+Not (ADR 0035): `finalize` — additive, serialize edilmez (`exclude=True`), `ModelBundle.pipeline`
+gibi canlı-nesne alanı. "Dondu" kilidi serialize edilen sözleşme yüzeyi için geçerli.
+"""
 
 from __future__ import annotations
+
+from typing import Any
 
 from pydantic import Field
 
@@ -26,3 +32,8 @@ class EngineResult(Contract):
     adaptive_plan: AdaptivePlan
     validation_reports_ref: str | None = None
     messages: list[str] = Field(default_factory=list)
+
+    # ADR 0035: `finalize(full_frame: pd.DataFrame) -> ModelBundle` — şampiyonu train+holdout
+    # (full) veride yeniden fit eder. Orchestrator holdout skorundan **sonra** çağırır.
+    # Serialize edilmez; engine kurar, `None` → refit-on-full yok (tabular fallback).
+    finalize: Any = Field(default=None, exclude=True, repr=False)

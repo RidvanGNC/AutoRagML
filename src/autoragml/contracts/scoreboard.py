@@ -27,6 +27,7 @@ class ScoreRow(Contract):
     class_weighted_score: float | None = None
     realized_seconds: float = Field(default=0.0, ge=0.0)
     n_trials: int = Field(default=0, ge=0)
+    n_folds: int = Field(default=0, ge=0)  # ADR 0035: aile-arası robustluk tie-break
     best_iteration: int | None = None
 
 

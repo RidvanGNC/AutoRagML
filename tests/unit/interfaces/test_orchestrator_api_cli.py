@@ -75,6 +75,29 @@ def test_manifest_timeline_all_ok(orch_run: _Out) -> None:
     assert all(t.status.value == "ok" for t in orch_run.result.manifest.timeline)
 
 
+def test_champion_refit_full_stage(orch_run: _Out) -> None:
+    """ADR 0035: finalize stage şampiyonu full veride refit eder, holdout metriği korunur."""
+    tl = {t.stage: t for t in orch_run.result.manifest.timeline}
+    assert "finalize" in tl and tl["finalize"].status.value == "ok"
+    assert "yeniden fit" in (tl["finalize"].detail or "")
+    r = orch_run.result
+    assert r.champion.metrics_holdout and r.champion.pipeline is not None
+    preds = r.champion.pipeline.predict(_df(40))
+    assert preds.shape == (40,) and np.isfinite(preds).all()
+
+
+def test_champion_refit_full_can_be_disabled(tmp_path: Path) -> None:
+    resolution = resolve_run_config(
+        target="y",
+        overrides={"hpo_level": "none", "champion_refit_full": False,
+                   "output_dir": str(tmp_path), "project_name": "nofit"},
+    )
+    result = Orchestrator().run(_df(), resolution.config, resolution=resolution)
+    tl = {t.stage: t for t in result.manifest.timeline}
+    assert tl["finalize"].status.value == "ok"
+    assert "yok" in (tl["finalize"].detail or "")
+
+
 def test_autoragml_facade_fit_predict_leaderboard(tmp_path: Path) -> None:
     model = AutoRagML(hpo_level="none", output_dir=str(tmp_path))
     result = model.fit(_df(), target="y")

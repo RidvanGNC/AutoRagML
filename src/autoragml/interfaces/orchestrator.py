@@ -77,6 +77,30 @@ class Orchestrator:
             else:
                 st.detail = "holdout yok veya pipeline bellekte değil"
 
+        with self._stage("finalize", timeline) as st:
+            can_finalize = (
+                hsplit is not None
+                and config.champion_refit_full
+                and engine_result.finalize is not None
+                and engine_result.status is not EngineStatus.FAILED
+            )
+            if can_finalize:
+                holdout_metrics = dict(engine_result.champion.metrics_holdout)
+                try:
+                    full_champ = engine_result.finalize(frame_full)
+                    full_champ.metrics_holdout = holdout_metrics
+                    engine_result.champion = full_champ
+                    st.detail = (
+                        f"şampiyon `{full_champ.metadata.model_key}` full veride "
+                        f"({len(frame_full)} satır) yeniden fit edildi"
+                    )
+                    logger.info("[orchestrator] champion_refit_full: %s", st.detail)
+                except Exception as exc:  # noqa: BLE001 — refit çökerse train-şampiyonu korunur
+                    st.detail = f"refit-on-full atlandı (train-şampiyonu korundu): {exc}"
+                    logger.warning("[orchestrator] champion_refit_full başarısız: %s", exc)
+            else:
+                st.detail = "refit-on-full yok (holdout yok / kapalı / engine desteklemiyor)"
+
         elapsed = time.perf_counter() - t0
         with self._stage("persist", timeline):
             _, manifest = persist_run(

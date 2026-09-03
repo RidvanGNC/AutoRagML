@@ -96,6 +96,7 @@ def build_scoreboard(
                 oof_metric_mean=metric_value if metric_value is not None and math.isfinite(metric_value)
                 else (_INF if lower else -_INF),
                 oof_metric_se=report.oof_metric_se.get(primary, 0.0),
+                n_folds=len(report.folds),
                 all_metrics_mean=dict(report.oof_metrics),
                 guardrail_flags=flags,
                 is_quarantined=bool(flags),

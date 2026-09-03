@@ -14,6 +14,7 @@ from autoragml.contracts.candidate import Candidate
 from autoragml.contracts.data_profile import DataProfile
 from autoragml.contracts.engine_result import EngineResult
 from autoragml.contracts.enums import EngineStatus
+from autoragml.contracts.model_bundle import ModelBundle
 from autoragml.contracts.run_config import RunConfig
 from autoragml.contracts.task_spec import TaskSpec
 from autoragml.dynamics import build_plan
@@ -150,11 +151,21 @@ def run_core_pipeline(
         )
 
     selection = score_reports(reports, candidates, config, task, profile)
-    champion = refit_champion(
-        selection, candidates, reports, frame, plan, profile, task, config,
-        tuner=tuner, pre_transform=pre_transform,
-        recursive_season=recursive_season if recursive else None,
-    )
+    _season = recursive_season if recursive else None
+
+    def _refit(work_frame: pd.DataFrame) -> ModelBundle:
+        return refit_champion(
+            selection, candidates, reports, work_frame.reset_index(drop=True),
+            plan, profile, task, config,
+            tuner=tuner, pre_transform=pre_transform, recursive_season=_season,
+        )
+
+    champion = _refit(frame)
+
+    def _finalize_on_full(full_frame: pd.DataFrame) -> ModelBundle:
+        """ADR 0035: şampiyonu train+holdout (full ham frame) üstünde yeniden fit."""
+        aug = pre_transform(full_frame) if pre_transform is not None else full_frame
+        return _refit(aug)
 
     status = EngineStatus.PARTIAL if degraded else EngineStatus.SUCCESS
     return EngineResult(
@@ -166,5 +177,6 @@ def run_core_pipeline(
         data_profile=profile,
         task_spec=task,
         adaptive_plan=plan,
+        finalize=_finalize_on_full,
         messages=msgs,
     )

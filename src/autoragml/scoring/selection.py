@@ -85,11 +85,20 @@ def _rank_value(row: ScoreRow, lower: bool) -> float:
 
 
 def _within_one_se(pool: list[ScoreRow], best: ScoreRow, noise_floor: float, lower: bool) -> list[ScoreRow]:
-    if noise_floor <= 0:
-        return [best]
-    if lower:
-        return [r for r in pool if r.oof_metric_mean <= best.oof_metric_mean + noise_floor]
-    return [r for r in pool if r.oof_metric_mean >= best.oof_metric_mean - noise_floor]
+    """1-SE bandı — **aday-başı** SE (ADR 0035/K3): `best` ve aday'ın kendi SE'sinin (ve
+    `noise_floor` tabanının) büyüğü kadar tolerans. Heterojen OOF ızgaralarında (klasik cutoff
+    vs reduction fold) tek medyan-SE yanlış üye seçiyordu."""
+    b = best.oof_metric_mean
+    within: list[ScoreRow] = []
+    for r in pool:
+        band = max(best.oof_metric_se, r.oof_metric_se, noise_floor)
+        if band <= 0:
+            if r.model_key == best.model_key:
+                within.append(r)
+            continue
+        if (lower and r.oof_metric_mean <= b + band) or (not lower and r.oof_metric_mean >= b - band):
+            within.append(r)
+    return within or [best]
 
 
 def select_champion(
@@ -113,13 +122,19 @@ def select_champion(
     within = _within_one_se(pool_sorted, best, noise_floor, lower)
 
     if config.selection_rule is SelectionRule.ONE_STD_ERR:
+        # ADR 0035/K3: basitlik → robustluk (çok fold + düşük SE) → süre.
         champ = min(
             within,
-            key=lambda r: (_FAMILY_COMPLEXITY.get(r.family, 3), r.realized_seconds),
+            key=lambda r: (
+                _FAMILY_COMPLEXITY.get(r.family, 3),
+                -r.n_folds,
+                r.oof_metric_se,
+                r.realized_seconds,
+            ),
         )
         reason = (
-            f"1-SE kuralı: en iyinin {noise_floor:.3g} SE'si içindeki {len(within)} adaydan "
-            f"en basiti ({champ.family})"
+            f"1-SE kuralı: en iyinin ~{noise_floor:.3g} SE'si içindeki {len(within)} adaydan "
+            f"en basit/robust ({champ.family}, {champ.n_folds} fold)"
         )
     else:
         champ = best
