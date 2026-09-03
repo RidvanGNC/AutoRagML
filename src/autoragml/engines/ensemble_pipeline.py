@@ -76,6 +76,10 @@ class FittedEnsemblePipeline:
         return None if self._classes is None else self._classes
 
     @property
+    def supports_proba(self) -> bool:
+        return all(getattr(m, "supports_proba", False) for m in self._members)
+
+    @property
     def feature_cols(self) -> list[str]:
         cols: set[str] = set()
         for m in self._members:

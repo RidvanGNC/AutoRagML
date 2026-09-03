@@ -102,6 +102,15 @@ class FittedModelPipeline:
         return np.asarray(self._estimator.predict_proba(self._design_matrix(frame)), dtype=np.float64)
 
     @property
+    def supports_proba(self) -> bool:
+        """Estimator `predict_proba` sunuyor mu (RidgeClassifier/LinearSVC vb. sunmaz — ADR 0036).
+
+        sklearn `Pipeline` + `_available_if` descriptor'ı da doğru propagate eder → `getattr`
+        eksik metotta `AttributeError` atar, `None` döner.
+        """
+        return callable(getattr(self._estimator, "predict_proba", None))
+
+    @property
     def classes(self) -> Any:
         return getattr(self._estimator, "classes_", getattr(self._estimator, "_classes", None))
 

@@ -20,7 +20,7 @@ import pandas as pd
 from autoragml.contracts.adaptive_plan import AdaptivePlan
 from autoragml.contracts.candidate import Candidate
 from autoragml.contracts.data_profile import DataProfile
-from autoragml.contracts.enums import Task
+from autoragml.contracts.enums import PredictKind, Task
 from autoragml.contracts.model_bundle import BundleMetadata, ModelBundle
 from autoragml.contracts.plan_context import PlanContext
 from autoragml.contracts.run_config import RunConfig
@@ -219,6 +219,11 @@ def _fit_pipeline(
     params = dict(outcome.best_params)
     target = task.targets[0]
 
+    # ADR 0036: sınıflandırmada bagging = olasılık ortalaması → aday `predict_proba` sunmalı
+    # (RidgeClassifier/LinearSVC vb. sunmaz → tek model refit).
+    if task.task in _CLASSIFICATION_TASKS and PredictKind.PROBA not in candidate.predict_kind:
+        want_bag = False
+
     folds = _bag_folds(work, config, task, profile, want_bag=want_bag)
 
     if folds is not None:
@@ -239,7 +244,11 @@ def _fit_pipeline(
         fitted_post, summary = _maybe_postproc(
             with_postproc, config, profile, task, np.concatenate(oof_true), np.concatenate(oof_pred)
         )
-        bag_classes = members[0].classes if task.task in _CLASSIFICATION_TASKS else None
+        bag_classes = (
+            members[0].classes
+            if task.task in _CLASSIFICATION_TASKS and members[0].supports_proba
+            else None
+        )
         bag = FittedEnsemblePipeline(
             members=members,
             weights=[1.0 / len(members)] * len(members),
@@ -730,7 +739,9 @@ def _refit_ensemble(
     )
 
     ens_classes = (
-        getattr(fitted[0], "classes", None) if task.task in _CLASSIFICATION_TASKS else None
+        getattr(fitted[0], "classes", None)
+        if task.task in _CLASSIFICATION_TASKS and all(getattr(f, "supports_proba", False) for f in fitted)
+        else None
     )
     pipeline = FittedEnsemblePipeline(
         members=fitted, weights=weights, pre_transform=pre_transform,
