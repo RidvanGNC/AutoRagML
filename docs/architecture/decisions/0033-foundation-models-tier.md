@@ -209,3 +209,11 @@ Yeni modül (nöral kapıdan ayrı — farklı band + token/cache mantığı). `
   `is_foundation_ts`, lib-yok atlama). tabpfn/chronos kurulu değil → e2e skipif ile ertelendi.
 
 **Benchmark → tüm nöral blok (0030-0033) bitince (kullanıcı kararı).**
+
+## Güncelleme (2026-09-03, kullanıcı kararı)
+
+**"Ücretli/kapılı tüm kısımlar varsayılan KAPALI; kullanıcı istemedikçe listede olmayacak."**
+→ `models/catalog/foundation.yaml` `tabpfn: {enabled: false}`. TabPFN artık aday çözümüne hiç
+girmez (registry `enabled:false`'ı atlar); açmak için `model_catalog_override` YAML'ında
+`tabpfn: {enabled: true}` + `[foundation]` extra + `TABPFN_TOKEN`. Chronos (`[foundation-ts]`,
+auth'suz) `foundation_enabled=auto` ile çalışmaya devam eder.

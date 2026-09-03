@@ -69,6 +69,7 @@ def _panel_profile(n_series: int = 30, n_periods: int = 60):
 def test_foundation_catalog_present() -> None:
     cat = load_catalog()
     assert "tabpfn" in cat
+    assert cat["tabpfn"].get("enabled") is False  # KULLANICI KARARI: lisans-kapılı → varsayılan kapalı
     assert {"chronos_bolt", "chronos_bolt_small"} <= set(cat)
     assert cat["chronos_2"].get("enabled") is False  # opsiyonel
 

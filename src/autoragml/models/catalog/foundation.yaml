@@ -14,5 +14,8 @@ tabpfn:
   tasks: [regression, binary_classification, multiclass_classification]
   predict_kind: [point, proba]
   requires: [tabpfn]
+  # KULLANICI KARARI (2026-09-03): TabPFN lisans/token kapılı ("ücretli") → **varsayılan KAPALI**,
+  # aday listesinde görünmez. Açmak için: model_catalog_override YAML'ında `tabpfn: {enabled: true}`.
+  enabled: false
   # n_estimators: TabPFN iç ensemble tekrar sayısı (hız/kalite dengesi). random_state sabit → determinist.
   default_params: {random_state: 42, n_estimators: 4}
