@@ -42,6 +42,57 @@ mstl:
   requires: [statsforecast]
   default_params: {}
 
+# ADR 0040 — akademik tarama eklemeleri. `season_length` `_build_model`'da oto-enjekte.
+auto_ces:
+  name: AutoCES
+  family: statistical
+  class_path:
+    regression: statsforecast.models.AutoCES
+  modalities: [timeseries]
+  tasks: [forecasting]
+  requires: [statsforecast]
+  default_params: {}   # complex exponential smoothing — bir benchmark'ta AutoARIMA'yı geçti
+
+auto_tbats:
+  name: AutoTBATS
+  family: statistical
+  class_path:
+    regression: statsforecast.models.AutoTBATS
+  modalities: [timeseries]
+  tasks: [forecasting]
+  requires: [statsforecast]
+  default_params: {}   # çoklu mevsim + Box-Cox; per-seri yavaş (ETS'den ~10×)
+
+dynamic_theta:
+  name: DynamicOptimizedTheta
+  family: statistical
+  class_path:
+    regression: statsforecast.models.DynamicOptimizedTheta
+  modalities: [timeseries]
+  tasks: [forecasting]
+  requires: [statsforecast]
+  default_params: {}   # M3 winner Theta ailesi — dinamik ağırlıklı
+
+imapa:
+  name: IMAPA
+  family: intermittent
+  class_path:
+    regression: statsforecast.models.IMAPA
+  modalities: [timeseries]
+  tasks: [forecasting]
+  requires: [statsforecast]
+  default_params: {}   # Intermittent Multiple Aggregation Prediction — M5 kesikli talep
+
+adida:
+  name: ADIDA
+  family: intermittent
+  class_path:
+    regression: statsforecast.models.ADIDA
+  modalities: [timeseries]
+  tasks: [forecasting]
+  requires: [statsforecast]
+  default_params: {}   # Aggregate-Disaggregate Intermittent Demand
+
 croston:
   name: CrostonOptimized
   family: intermittent

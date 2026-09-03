@@ -30,7 +30,9 @@ dependencies = [
 db         = ["sqlalchemy>=2.0"]
 xgboost    = ["xgboost>=2.0"]
 catboost   = ["catboost>=1.2"]
-timeseries = ["statsforecast>=1.7"]           # v1: AutoARIMA/AutoETS/MSTL/Theta
+interpret  = ["interpret-core>=0.6"]          # ADR 0040: EBM (cam-kutu GAM boosting)
+ngboost    = ["ngboost>=0.5"]                 # ADR 0040: olasılıksal gradient boosting
+timeseries = ["statsforecast>=1.7"]           # v1: AutoARIMA/AutoETS/CES/TBATS/Theta/IMAPA/ADIDA
 hpo        = ["optuna>=3.5"]
 tracking   = ["mlflow>=2.10"]
 report     = ["matplotlib>=3.7"]           # HTML/MD/CSV bağımlılıksız; extra yalnız PNG grafikler

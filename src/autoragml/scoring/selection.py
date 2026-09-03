@@ -26,6 +26,7 @@ _FAMILY_COMPLEXITY: dict[str, int] = {
     "statistical": 1,
     "intermittent": 1,
     "distance": 2,
+    "glassbox": 2,        # EBM — yorumlanabilir GAM; eşitlikte GBDT'ye tercih (ADR 0040)
     "forest": 3,
     "gbdt": 3,
     "ml": 3,

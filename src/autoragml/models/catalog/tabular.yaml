@@ -182,3 +182,76 @@ mlp:
     learning_rate_init: {type: loguniform, low: 0.0002, high: 0.02}
   wrap: true
   scale: true
+
+# ADR 0040 — akademik tarama eklemeleri (TabArena rosteri + klasik boşluk)
+
+ebm:
+  name: Explainable Boosting Machine
+  family: glassbox   # cyclic-boosting GAM — XGBoost-rakip + tam yorumlanabilir (ADR 0037 sinerjisi)
+  class_path:
+    regression: interpret.glassbox.ExplainableBoostingRegressor
+    classification: interpret.glassbox.ExplainableBoostingClassifier
+  modalities: [tabular, timeseries]
+  tasks: [regression, forecasting, binary_classification, multiclass_classification]
+  predict_kind: [point, proba]
+  requires: [interpret]
+  default_params: {random_state: 42, n_jobs: -1}
+
+knn:
+  name: KNN
+  family: distance
+  class_path:
+    regression: sklearn.neighbors.KNeighborsRegressor
+    classification: sklearn.neighbors.KNeighborsClassifier
+  modalities: [tabular, timeseries]
+  tasks: [regression, forecasting, binary_classification, multiclass_classification]
+  predict_kind: [point, proba]
+  default_params: {n_neighbors: 15, weights: distance, n_jobs: -1}
+  search_space:
+    n_neighbors: {type: int, low: 3, high: 50}
+  wrap: true
+  scale: true   # mesafe-tabanlı → ölçekleme şart
+
+svr:
+  name: SVR
+  family: distance   # kernel — mesafe/benzerlik ailesi
+  class_path:
+    regression: sklearn.svm.SVR
+  modalities: [tabular, timeseries]
+  tasks: [regression, forecasting]
+  default_params: {kernel: rbf, C: 10.0, epsilon: 0.1}
+  search_space:
+    C: {type: loguniform, low: 0.1, high: 1000.0}
+  wrap: true
+  scale: true
+  enabled: false   # O(n²) — küçük veri (<20K) için; kullanıcı açar
+
+svc:
+  name: SVC
+  family: distance
+  class_path:
+    classification: sklearn.svm.SVC
+  modalities: [tabular]
+  tasks: [binary_classification, multiclass_classification]
+  predict_kind: [point, proba]
+  default_params: {kernel: rbf, C: 10.0, probability: true, random_state: 42}
+  search_space:
+    C: {type: loguniform, low: 0.1, high: 1000.0}
+  wrap: true
+  scale: true
+  enabled: false   # O(n²) + probability=True pahalı
+
+ngboost:
+  name: NGBoost
+  family: gbdt   # olasılıksal gradient boosting — quantile/dağılım
+  class_path:
+    regression: ngboost.NGBRegressor
+    classification: ngboost.NGBClassifier
+  modalities: [tabular, timeseries]
+  tasks: [regression, forecasting, binary_classification, multiclass_classification]
+  predict_kind: [point, proba, quantile]
+  requires: [ngboost]
+  default_params: {n_estimators: 500, learning_rate: 0.03, random_state: 42, verbose: false}
+  search_space:
+    learning_rate: {type: loguniform, low: 0.005, high: 0.1}
+  fidelity: n_estimators

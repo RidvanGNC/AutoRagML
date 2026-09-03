@@ -36,6 +36,8 @@ _ENV_PACKAGES = (
     "tabpfn",
     "chronos-forecasting",
     "transformers",
+    "interpret-core",
+    "ngboost",
 )
 
 

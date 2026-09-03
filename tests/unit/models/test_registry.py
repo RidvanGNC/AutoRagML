@@ -53,6 +53,21 @@ def test_forecasting_uses_reduction_regressors() -> None:
     assert "random_forest" in keys
 
 
+def test_adr0040_academic_additions_resolve() -> None:
+    """ADR 0040: klasik forecasting + EBM/KNN/NGBoost eklemeleri (kurulu extra'larla)."""
+    import importlib.util as u
+
+    fc = {c.key for c in resolve_candidates(_cfg(), _reg_task(Modality.TIMESERIES, Task.FORECASTING))}
+    assert {"auto_ces", "auto_tbats", "dynamic_theta", "imapa", "adida"} <= fc  # statsforecast dep var
+    assert "knn" in fc  # sklearn — reduction yolu
+
+    reg = {c.key for c in resolve_candidates(_cfg(), _reg_task())}
+    assert "knn" in reg
+    assert ("ebm" in reg) == (u.find_spec("interpret") is not None)
+    assert ("ngboost" in reg) == (u.find_spec("ngboost") is not None)
+    assert "svr" not in reg and "svc" not in reg  # enabled: false
+
+
 def test_no_match_raises() -> None:
     with pytest.raises(ModelCatalogError, match="uygun model adayı yok"):
         resolve_candidates(_cfg(), _reg_task(task=Task.MULTILABEL_CLASSIFICATION))
