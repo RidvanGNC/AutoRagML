@@ -23,6 +23,7 @@ from autoragml.models.foundation_gate import prepare_foundation_candidates
 
 _HAS_TABPFN = importlib.util.find_spec("tabpfn") is not None
 _HAS_CHRONOS = importlib.util.find_spec("chronos") is not None
+_HAS_TIMESFM = importlib.util.find_spec("timesfm") is not None
 
 
 def _cfg(**over: object):
@@ -70,8 +71,10 @@ def test_foundation_catalog_present() -> None:
     cat = load_catalog()
     assert "tabpfn" in cat
     assert cat["tabpfn"].get("enabled") is False  # KULLANICI KARARI: lisans-kapılı → varsayılan kapalı
-    assert {"chronos_bolt", "chronos_bolt_small"} <= set(cat)
+    assert {"chronos_bolt", "chronos_bolt_small", "timesfm_2p5"} <= set(cat)  # ADR 0041: TimesFM
     assert cat["chronos_2"].get("enabled") is False  # opsiyonel
+    assert cat["chronos_bolt"]["default_params"]["backend"] == "chronos"
+    assert cat["timesfm_2p5"]["default_params"]["backend"] == "timesfm"
 
 
 def test_is_foundation_ts() -> None:
@@ -152,3 +155,61 @@ def test_gate_chronos_min_series(monkeypatch) -> None:
         _cfg(foundation_enabled="on", group_col="unique_id", foundation_ts_min_series=100),
     )
     assert out == []
+
+
+def test_gate_timesfm_not_size_gated(monkeypatch) -> None:
+    """ADR 0041: `size` alanı olmayan backend (timesfm) küçük panelde boyut-kapısına takılmaz."""
+    monkeypatch.setattr("autoragml.models.foundation_gate.has_cuda", lambda: True)
+    prof, task = _panel_profile(n_series=25)  # küçük panel → chronos boyut-seçimi tetiklenir
+    tf = Candidate(
+        key="timesfm_2p5", name="timesfm_2p5", family="foundation_ts", class_path="__foundation_ts__",
+        modalities=[Modality.TIMESERIES], tasks=[Task.FORECASTING],
+        default_params={"backend": "timesfm", "checkpoint": "google/timesfm-2.5-200m-pytorch"},
+    )
+    out = prepare_foundation_candidates(
+        [tf, _ts_cand("chronos_bolt", "base")], prof, task,
+        _cfg(foundation_enabled="on", group_col="unique_id"),
+    )
+    keys = [c.key for c in out]
+    assert "timesfm_2p5" in keys       # boyut-kapısına takılmadı
+    assert "chronos_bolt" not in keys  # base → küçük panelde elendi
+
+
+@pytest.mark.skipif(not _HAS_TIMESFM, reason="timesfm kurulu değil")
+@pytest.mark.filterwarnings("ignore::UserWarning", "ignore::FutureWarning")
+def test_timesfm_reports_and_serving() -> None:
+    """GPU'da (yoksa CPU) TimesFM CV + refit + serving — gerçek forecast."""
+    from autoragml.analyzers import analyze
+    from autoragml.engines.timeseries.foundation_ts import (
+        refit_foundation_ts,
+        run_foundation_ts_reports,
+    )
+    from autoragml.io import load_dataset, materialize_frame
+
+    rng = np.random.default_rng(0)
+    months = pd.date_range("2018-01-01", periods=64, freq="MS")
+    df = pd.DataFrame([
+        {"unique_id": f"s{g}", "ds": m, "y": 40 + g + 10 * np.sin(i / 12 * 6.28) + rng.normal(0, 2)}
+        for g in range(15) for i, m in enumerate(months)
+    ])
+    cfg = resolve_run_config(
+        target="y",
+        overrides={"time_col": "ds", "group_col": "unique_id", "split_policy": {"horizon": 6},
+                   "foundation_enabled": "on"},
+    ).config
+    ds = load_dataset(df, cfg)
+    profile, task = analyze(ds, cfg)
+    frame = materialize_frame(ds)
+    tf = next(c for c in build_candidates(cfg) if c.key == "timesfm_2p5")
+
+    reports, _ = run_foundation_ts_reports(frame, profile, task, cfg, [tf])
+    assert reports and reports[0].candidate_key == "timesfm_2p5"
+
+    fc = refit_foundation_ts(tf, df, profile, task, cfg)
+    last = df["ds"].max()
+    fut = pd.date_range(last, periods=7, freq="MS")[1:]
+    future = pd.DataFrame([{"unique_id": u, "ds": m, "y": np.nan}
+                           for u in df["unique_id"].unique() for m in fut])
+    preds = fc.predict(future)
+    assert preds.shape == (len(future),) and np.isfinite(preds).all()
+    assert float(np.std(preds)) > 0  # gerçek forecast, fallback değil

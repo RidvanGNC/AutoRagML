@@ -96,12 +96,15 @@ def prepare_foundation_candidates(
                 n_series, config.foundation_ts_min_series,
             )
         else:
-            # model boyutu auto-seç: küçük panel / kısa geçmiş → _small
+            # Chronos boyutu auto-seç: küçük panel / kısa geçmiş → _small (yalnız `size` alanı olan
+            # adaylar — timesfm gibi tek-boyutlu backend'ler dokunulmaz).
             min_obs = min((sp.n_obs for sp in per_series), default=0) if per_series else 0
             hist_floor = config.foundation_ts_min_history_mult * max(_season_of(profile), 1) * 4
             want_small = n_series < _SMALL_PANEL_SERIES or min_obs < hist_floor
             for c in ts_keep:
-                is_small = str(c.default_params.get("size", "base")) == "small"
+                if "size" not in c.default_params:
+                    continue
+                is_small = str(c.default_params["size"]) == "small"
                 if want_small != is_small:
                     drop.add(c.key)
 

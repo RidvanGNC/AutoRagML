@@ -38,6 +38,7 @@ _ENV_PACKAGES = (
     "transformers",
     "interpret-core",
     "ngboost",
+    "timesfm",
 )
 
 

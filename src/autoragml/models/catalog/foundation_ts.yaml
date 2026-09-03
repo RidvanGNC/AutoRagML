@@ -1,9 +1,9 @@
 description: >
-  Foundation (zero-shot) forecasting modelleri (ADR 0033). `[foundation-ts]` extra:
-  chronos-forecasting (Amazon Chronos). **fit yok** — pretrained, zero-shot. Native panel yolu
-  (engines/timeseries/foundation_ts): rolling-origin pencerelerde `predict_df` → OOF; serving tek
-  `predict_df`. Auth'suz HuggingFace ağırlık indirmesi. `foundation_enabled=auto` iken yalnız GPU.
-  `neural_search` etkisiz (aranacak mimari yok). Model boyutu auto-seçilir (küçük panel → _small).
+  Foundation (zero-shot) forecasting modelleri (ADR 0033 + 0041). **fit yok** — pretrained.
+  Native panel yolu (engines/timeseries/foundation_ts): rolling-origin pencerelerde backend
+  forecast → OOF; serving tek forward geçiş. Auth'suz HuggingFace indirmesi. `foundation_enabled=
+  auto` iken yalnız GPU. Backend `default_params.backend` ile: `chronos` (Amazon, `[foundation-ts]`)
+  | `timesfm` (Google, `[foundation-ts-timesfm]`). Chronos boyutu auto-seçilir (küçük panel → small).
 
 chronos_bolt:
   name: Chronos-Bolt (base)
@@ -12,7 +12,7 @@ chronos_bolt:
   modalities: [timeseries]
   tasks: [forecasting]
   requires: [chronos]                     # pip: chronos-forecasting → import adı `chronos`
-  default_params: {checkpoint: amazon/chronos-bolt-base, size: base}
+  default_params: {backend: chronos, checkpoint: amazon/chronos-bolt-base, size: base}
 
 chronos_bolt_small:
   name: Chronos-Bolt (small)
@@ -21,7 +21,16 @@ chronos_bolt_small:
   modalities: [timeseries]
   tasks: [forecasting]
   requires: [chronos]
-  default_params: {checkpoint: amazon/chronos-bolt-small, size: small}
+  default_params: {backend: chronos, checkpoint: amazon/chronos-bolt-small, size: small}
+
+timesfm_2p5:
+  name: TimesFM 2.5 (200M)
+  family: foundation_ts
+  class_path: __foundation_ts__
+  modalities: [timeseries]
+  tasks: [forecasting]
+  requires: [timesfm]                     # pip: timesfm[torch]
+  default_params: {backend: timesfm, checkpoint: google/timesfm-2.5-200m-pytorch}
 
 chronos_2:
   name: Chronos-2

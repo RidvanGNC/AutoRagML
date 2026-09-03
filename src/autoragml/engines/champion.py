@@ -424,7 +424,7 @@ def _foundation_ts_bundle(
     task: TaskSpec,
     config: RunConfig,
 ) -> ModelBundle:
-    """Foundation-TS (Chronos) şampiyonu → `FittedChronosForecaster` (ADR 0033) — zero-shot, fit yok."""
+    """Foundation-TS (Chronos) şampiyonu → `FittedFoundationForecaster` (ADR 0033) — zero-shot, fit yok."""
     from autoragml.engines.timeseries.foundation_ts import refit_foundation_ts
 
     forecaster = refit_foundation_ts(candidate, frame, profile, task, config)

@@ -31,7 +31,7 @@ _FOUNDATION_DIR = "champion_foundation"        # ADR 0033: TabPFN context sideca
 _FOUNDATION_TS_DIR = "champion_foundation_ts"  # ADR 0033: Chronos context sidecar
 
 _SIDECAR_ESTIMATORS = {"TabularModelEstimator", "FoundationTabEstimator"}
-_SIDECAR_PIPELINES = {"FittedNeuralForecaster", "FittedChronosForecaster"}
+_SIDECAR_PIPELINES = {"FittedNeuralForecaster", "FittedFoundationForecaster"}
 
 
 def _sidecar_estimator(pipeline: Any) -> Any | None:
@@ -98,7 +98,7 @@ def save_bundle(bundle: ModelBundle, path: str | Path, *, compress: int = 3) -> 
             kind = "arch"
         bundle.pipeline._estimator = None  # noqa: SLF001
     elif side_pipe is not None:
-        if type(side_pipe).__name__ == "FittedChronosForecaster":  # ADR 0033
+        if type(side_pipe).__name__ == "FittedFoundationForecaster":  # ADR 0033
             side_pipe.save(str(dest.parent / _FOUNDATION_TS_DIR))
             kind = "foundation_ts"
         else:  # FittedNeuralForecaster — ADR 0032
@@ -173,12 +173,12 @@ def load_bundle(path: str | Path) -> ModelBundle:
             raise PersistenceError(f"foundation sidecar dizini yok: {fnd_dir}")
         pipeline._estimator = FoundationTabEstimator().load(fnd_dir)  # noqa: SLF001
     elif sidecar == "foundation_ts":  # ADR 0033
-        from autoragml.engines.timeseries.foundation_ts import FittedChronosForecaster
+        from autoragml.engines.timeseries.foundation_ts import FittedFoundationForecaster
 
         fts_dir = src.parent / _FOUNDATION_TS_DIR
         if not fts_dir.is_dir():
             raise PersistenceError(f"foundation-TS sidecar dizini yok: {fts_dir}")
-        pipeline = FittedChronosForecaster.__new__(FittedChronosForecaster).load(str(fts_dir))
+        pipeline = FittedFoundationForecaster.__new__(FittedFoundationForecaster).load(str(fts_dir))
     elif sidecar == "ts" or (sidecar and pipeline is None):  # ADR 0032
         from autoragml.engines.timeseries.neural_ts import FittedNeuralForecaster
 

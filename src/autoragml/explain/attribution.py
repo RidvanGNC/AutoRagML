@@ -20,7 +20,7 @@ _TREE_HINTS = ("lgbm", "lightgbm", "xgb", "randomforest", "extratrees", "gradien
                "histgradientboosting", "decisiontree", "catboost")
 _LINEAR_HINTS = ("linearregression", "ridge", "lasso", "elasticnet", "logisticregression", "sgd")
 _FEATURELESS = {
-    "FittedClassicalForecaster", "FittedNeuralForecaster", "FittedChronosForecaster",
+    "FittedClassicalForecaster", "FittedNeuralForecaster", "FittedFoundationForecaster",
 }
 
 
