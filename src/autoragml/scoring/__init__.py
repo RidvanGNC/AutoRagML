@@ -43,6 +43,18 @@ _REGRESSION_TASKS = {
 }
 
 
+def _sparse_fraction(profile: DataProfile) -> float:
+    """Panelde kesikli-talep (intermittent + lumpy) seri payı — ADR 0028/0039. TS değilse 0."""
+    ts = profile.timeseries
+    if ts is None or not ts.intermittency_summary:
+        return 0.0
+    total = sum(ts.intermittency_summary.values())
+    if total <= 0:
+        return 0.0
+    sparse = ts.intermittency_summary.get("intermittent", 0) + ts.intermittency_summary.get("lumpy", 0)
+    return sparse / total
+
+
 def _serving_clip_lower(config: RunConfig, task: TaskSpec, target_min: float | None) -> float | None:
     """Serving'de uygulanacak negatif-olmayan kırpma tabanı (ADR 0027)."""
     pp = config.postprocess
@@ -142,7 +154,8 @@ def score_reports(
 
     board = build_scoreboard(reports, candidates, config, task, profile)
     champion, promotion = select_champion(
-        board.rows, reports, config, task, noise_floor=board.noise_floor
+        board.rows, reports, config, task,
+        noise_floor=board.noise_floor, sparse_frac=_sparse_fraction(profile),
     )
 
     if task.task is Task.FORECASTING:

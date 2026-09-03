@@ -69,7 +69,7 @@ def test_guardrail_leakage_and_disabled() -> None:
 def test_one_se_rule_picks_simplest() -> None:
     reports = [
         make_report("lightgbm", smape=10.0, se=2.0),
-        make_report("ridge", smape=10.8, se=2.0),  # 1 SE (2.0) içinde
+        make_report("ridge", smape=10.2, se=2.0),  # 1 SE içinde + ≤%3 maliyet (ADR 0039)
         make_report("dummy_mean", smape=25.0, se=2.0),  # dışında
     ]
     cands = [_cand("lightgbm", "gbdt"), _cand("ridge", "linear"), _cand("dummy_mean", "baseline")]
@@ -77,6 +77,18 @@ def test_one_se_rule_picks_simplest() -> None:
     assert sel.champion.model_key == "ridge"  # gbdt ile 1-SE bandında, ama linear daha basit
     assert "lightgbm" in sel.champion.within_1se
     assert "dummy_mean" not in sel.champion.within_1se
+
+
+def test_simplicity_substitution_capped_by_relative_cost() -> None:
+    """ADR 0039: basit model en iyiden >%3 kötüyse basitlik-ikamesi engellenir."""
+    reports = [
+        make_report("lightgbm", smape=10.0, se=3.0),
+        make_report("ridge", smape=10.8, se=3.0),  # 1-SE'de AMA +%8 → ikame yok
+    ]
+    cands = [_cand("lightgbm", "gbdt"), _cand("ridge", "linear")]
+    sel = score_reports(reports, cands, _cfg(), _TASK, make_profile())
+    assert sel.champion.model_key == "lightgbm"  # ridge çok pahalı → en iyi kalır
+    assert "ridge" in sel.champion.within_1se  # yine bantta (bilgi amaçlı)
 
 
 def test_se_band_filter_excludes_unstable_candidate() -> None:
@@ -133,6 +145,25 @@ def test_promotion_passes() -> None:
     reports = [make_report("a", smape=12.0, se=1.0)]
     sel = score_reports(reports, [_cand("a")], _cfg(), _TASK, make_profile())
     assert sel.promotion.passed is True
+
+
+def test_promotion_skips_pct_ceiling_on_intermittent_panel() -> None:
+    """ADR 0039: kesikli-talep baskın panelde wMAPE tavanı atlanır (doğal 50-100)."""
+    from autoragml.contracts.data_profile import TimeSeriesProfile
+
+    prof = make_profile()
+    sparse = prof.model_copy(update={"timeseries": TimeSeriesProfile(
+        intermittency_summary={"intermittent": 60, "lumpy": 25, "smooth": 15},  # %85 kesikli
+    )})
+    reports = [make_report("tsb", smape=90.0, se=3.0)]  # wmape = 81 > 35
+    sel = score_reports(reports, [_cand("tsb", "intermittent")], _cfg(primary_metric="wmape"), _TASK, sparse)
+    assert sel.promotion.passed is True  # kesikli panel → tavan atlandı
+    # kesikli-baskın DEĞİL → yine FAIL
+    dense = prof.model_copy(update={"timeseries": TimeSeriesProfile(
+        intermittency_summary={"intermittent": 10, "smooth": 90},
+    )})
+    sel2 = score_reports(reports, [_cand("tsb", "intermittent")], _cfg(primary_metric="wmape"), _TASK, dense)
+    assert sel2.promotion.passed is False
 
 
 def test_scoreboard_fields() -> None:

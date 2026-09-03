@@ -30,9 +30,16 @@ _FAMILY_COMPLEXITY: dict[str, int] = {
     "gbdt": 3,
     "ml": 3,
     "neural": 4,
+    "neural_ts": 4,       # ADR 0039
+    "foundation": 2,      # in-context / zero-shot — fit yok, operasyonel basit (ADR 0039)
+    "foundation_ts": 2,   # zero-shot pretrained forecaster (ADR 0039)
     "ensemble": 5,  # tek model eşitse tek model kazanır (ADR 0021)
     "stack": 6,  # en karmaşık — L2 stacker eşitse L1/ensemble kazanır (ADR 0034)
 }
+
+# ADR 0039: 1-SE basitlik ikamesi en fazla bu kadar göreli OOF maliyetine izin verir.
+# m5 smooth: chronos 51.7 → auto_theta 53.6 (%3.6) — basitlik bunu feda etmemeli.
+_SIMPLICITY_MAX_COST = 0.03
 
 
 def class_weighted_score(
@@ -118,6 +125,7 @@ def select_champion(
     task: TaskSpec,
     *,
     noise_floor: float,
+    sparse_frac: float = 0.0,
 ) -> tuple[ChampionInfo, PromotionResult]:
     """Sıralı `ScoreRow` listesinden şampiyon + promotion sonucu."""
     primary = config.primary_metric or default_primary_metric(task.task)
@@ -132,15 +140,20 @@ def select_champion(
     within = _within_one_se(pool_sorted, best, noise_floor, lower)
 
     if config.selection_rule is SelectionRule.ONE_STD_ERR:
-        # Basitlik (aile karmaşıklığı) → süre. (ADR 0035/K3 `-n_folds` tie-break GERİ ALINDI —
-        # klasik 3-pencere ↔ reduction 5-fold arası haksız ceza; m3'te auto_ets → elastic_net flip.)
+        # Basitlik (aile karmaşıklığı) → süre. (ADR 0035/K3 `-n_folds` tie-break GERİ ALINDI.)
+        # ADR 0039: basitlik ikamesi yalnız en iyiden ≤ %3 göreli maliyetliyse — bariz-daha-iyi
+        # foundation/nöral OOF'u feda etme.
+        b = best.oof_metric_mean
+        cap = abs(b) * _SIMPLICITY_MAX_COST if math.isfinite(b) and b != 0 else float("inf")
+        elig = [r for r in within if r.model_key == best.model_key or abs(r.oof_metric_mean - b) <= cap]
         champ = min(
-            within,
+            elig,
             key=lambda r: (_FAMILY_COMPLEXITY.get(r.family, 3), r.realized_seconds),
         )
         reason = (
             f"1-SE kuralı: en iyinin ~{max(best.oof_metric_se, noise_floor):.3g} SE'si içindeki "
-            f"{len(within)} adaydan en basiti ({champ.family})"
+            f"{len(within)} adaydan (≤%{_SIMPLICITY_MAX_COST * 100:.0f} maliyetli {len(elig)}) "
+            f"en basiti ({champ.family})"
         )
     else:
         champ = best
@@ -152,7 +165,7 @@ def select_champion(
     within_keys = [r.model_key for r in within]
 
     champ_report = next((r for r in reports if r.candidate_key == champ.model_key), None)
-    promotion = _evaluate_promotion(champ, champ_report, config)
+    promotion = _evaluate_promotion(champ, champ_report, config, sparse_frac)
 
     return (
         ChampionInfo(
@@ -167,7 +180,7 @@ def select_champion(
 
 
 def _evaluate_promotion(
-    champ: ScoreRow, report: ValidationReport | None, config: RunConfig
+    champ: ScoreRow, report: ValidationReport | None, config: RunConfig, sparse_frac: float = 0.0
 ) -> PromotionResult:
     p = config.promotion
     reasons: list[str] = []
@@ -176,8 +189,14 @@ def _evaluate_promotion(
     # `smape_max` aslında bir "yüzde-hata tavanı" (ADR 0014, DemandSensing). Kesikli talepte sMAPE
     # y≈0'da patlar → wMAPE koşumunda "smape 145 > 35" yanlış/anlamsız. Tavanı **primary metriğe**
     # uygula (sMAPE-benzeri yüzde metrikler): sMAPE / wMAPE / MAPE. Diğer primary → tavan atlanır.
+    # ADR 0039: panel intermittency-baskın (≥ segment_sparse_min_frac) → wMAPE doğal 50-100, tavan atlanır.
     pct_metric = (config.primary_metric or "smape").lower()
-    if p.smape_max is not None and pct_metric in {"smape", "wmape", "mape"}:
+    sparse_dominant = sparse_frac >= config.dynamics.segment_sparse_min_frac
+    if (
+        p.smape_max is not None
+        and pct_metric in {"smape", "wmape", "mape"}
+        and not sparse_dominant
+    ):
         v = m.get(pct_metric)
         if v is not None and v > p.smape_max:
             reasons.append(f"{pct_metric} {v:.2f} > {p.smape_max}")
