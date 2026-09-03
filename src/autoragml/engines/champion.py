@@ -35,6 +35,7 @@ from autoragml.engines.timeseries.classical import (
     refit_classical_ensemble,
 )
 from autoragml.ensembling import ENSEMBLE_KEY
+from autoragml.ensembling.stacking import STACK_FAMILY
 from autoragml.exceptions import EngineError
 from autoragml.logging import get_logger
 from autoragml.models import build_estimator
@@ -295,12 +296,12 @@ def refit_champion(
     tuner = tuner or DefaultTuner()
     work = frame.reset_index(drop=True)
 
-    _native_ts = {"neural_ts", "foundation_ts"}
+    _non_recursive_fam = {"neural_ts", "foundation_ts", STACK_FAMILY}
     if (
         recursive_season is not None
         and key != CLASSICAL_ENSEMBLE_KEY
         and not is_classical(candidate)
-        and candidate.family not in _native_ts
+        and candidate.family not in _non_recursive_fam
     ):
         return _recursive_bundle(
             candidate, selection, work, plan, profile, task, config, season=recursive_season
@@ -308,6 +309,12 @@ def refit_champion(
 
     if key == ENSEMBLE_KEY:
         return _refit_ensemble(
+            candidate, selection, candidates, reports, work, plan, profile, task, config,
+            tuner, pre_transform,
+        )
+
+    if candidate.family == STACK_FAMILY:
+        return _stack_bundle(
             candidate, selection, candidates, reports, work, plan, profile, task, config,
             tuner, pre_transform,
         )
@@ -494,6 +501,88 @@ def _classical_bundle(
         metadata=metadata,
         metrics_oof=dict(champ_row.all_metrics_mean) if champ_row else {},
         pipeline=forecaster,
+    )
+
+
+def _stack_bundle(
+    stack_candidate: Candidate,
+    selection: SelectionResult,
+    candidates: list[Candidate],
+    reports: list[ValidationReport],
+    work: pd.DataFrame,
+    plan: AdaptivePlan,
+    profile: DataProfile,
+    task: TaskSpec,
+    config: RunConfig,
+    tuner: Tuner,
+    pre_transform: Transform | None,
+) -> ModelBundle:
+    """`stack_<base>` şampiyonu — L1 üyeleri (bagged) + L2 stacker refit → `FittedStackPipeline`.
+
+    L2, L1 raporlarının **OOF** tahminleri üstünde fit edilir (leakage-free — ADR 0011/0022/0034);
+    serving'de L1 üyeleri tam-train modelleridir.
+    """
+    from autoragml.engines.stack_pipeline import FittedStackPipeline
+
+    member_keys = list(stack_candidate.ensemble_members or {})
+    base_key = str(stack_candidate.default_params.get("stack_base_key", ""))
+    base_cand = next((c for c in candidates if c.key == base_key), None)
+    if base_cand is None:
+        msg = f"stack refit: taban model `{base_key}` bulunamadı"
+        raise EngineError(msg)
+
+    l1_by_key = {r.candidate_key: r for r in reports if getattr(r, "oof", None) is not None}
+    fitted_members: list[Predictor] = []
+    used_keys: list[str] = []
+    for mkey in member_keys:
+        mcand = next((c for c in candidates if c.key == mkey), None)
+        if mcand is None or mkey not in l1_by_key:
+            continue
+        fit = _fit_pipeline(
+            mcand, l1_by_key[mkey], work, plan, profile, task, config, tuner,
+            with_postproc=False, pre_transform=None,
+        )
+        fitted_members.append(fit.pipeline)
+        used_keys.append(mkey)
+    if len(fitted_members) < 2:
+        msg = "stack refit: 2'den az L1 üye fit edilebildi"
+        raise EngineError(msg)
+
+    y = l1_by_key[used_keys[0]].oof.y_true.astype(np.float64)
+    z = np.column_stack([l1_by_key[k].oof.y_pred.astype(np.float64) for k in used_keys])
+    z = np.nan_to_num(z, nan=0.0, posinf=0.0, neginf=0.0)
+    l2 = build_estimator(base_cand, task.task, {})
+    l2.fit(z, y)
+
+    stack_report = next((r for r in reports if r.candidate_key == stack_candidate.key), None)
+    oof = getattr(stack_report, "oof", None)
+    fitted_post, postprocess_summary = _maybe_postproc(
+        True, config, profile, task, getattr(oof, "y_true", None), getattr(oof, "y_pred", None)
+    )
+
+    pipeline = FittedStackPipeline(
+        members=fitted_members, l2_estimator=l2,
+        pre_transform=pre_transform, postprocessor=fitted_post,
+    )
+    champ_row = next(
+        (r for r in selection.scoreboard.rows if r.model_key == stack_candidate.key), None
+    )
+    metadata = BundleMetadata(
+        feature_cols=pipeline.feature_cols,
+        feature_set_hash=_feature_hash(pipeline.feature_cols),
+        target_col=task.targets[0],
+        model_key=stack_candidate.key,
+        scenario=selection.champion.scenario,
+        best_iteration=None,
+        adaptive_plan_summary={"structure": "l2_stack", "committed_ops": len(plan.committed_ops)},
+        params={"stack_base": base_key, "level": 2},
+        postprocess_summary=postprocess_summary,
+        ensemble={"members": dict.fromkeys(used_keys, 1.0), "method": "stack", "base_model": base_key},
+    )
+    return ModelBundle(
+        metadata=metadata,
+        metrics_oof=dict(champ_row.all_metrics_mean) if champ_row else {},
+        pipeline=pipeline,
     )
 
 

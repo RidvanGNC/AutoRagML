@@ -176,6 +176,12 @@ class RunConfig(Contract):
     neural_ts_min_series: int = Field(default=20, ge=2)  # altında nöral-TS atlanır
     neural_ts_min_history_mult: float = Field(default=3.0, gt=0.0)  # seri ≥ mult · season · h
 
+    # --- L2 stacking (ADR 0034) — saf stacking, tek katman ---
+    stacking_enabled: Literal["auto", "on", "off"] = "auto"
+    stacking_min_rows: int = Field(default=2000, ge=1)      # auto: altında stack katmanı atlanır
+    stacking_min_families: int = Field(default=4, ge=2)     # auto: ≥ bu kadar çeşitli L1 ailesi
+    stack_levels: int = Field(default=1, ge=1, le=1)        # rezerve — L3+ v1.1 sonrası
+
     # --- foundation modeller (ADR 0033) — `[foundation]` / `[foundation-ts]` extra ---
     foundation_enabled: Literal["auto", "on", "off"] = "auto"  # auto: GPU şart; nöralden ayrı bayrak
     foundation_device: Literal["auto", "cpu", "cuda"] = "auto"

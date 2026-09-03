@@ -30,7 +30,8 @@ _FAMILY_COMPLEXITY: dict[str, int] = {
     "gbdt": 3,
     "ml": 3,
     "neural": 4,
-    "ensemble": 5,  # en karmaşık — tek model eşitse tek model kazanır (ADR 0021)
+    "ensemble": 5,  # tek model eşitse tek model kazanır (ADR 0021)
+    "stack": 6,  # en karmaşık — L2 stacker eşitse L1/ensemble kazanır (ADR 0034)
 }
 
 

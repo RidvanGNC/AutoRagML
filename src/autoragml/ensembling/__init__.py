@@ -69,7 +69,10 @@ def build_weighted_ensemble(
     if not ec.enabled or task.task not in _ELIGIBLE_TASKS:
         return None
 
-    aligned = _aligned_reports(reports)
+    # ADR 0034: L2 stacker'lar 1-SE seçiminde doğrudan yarışır ama GES üyesi DEĞİL
+    # (GES = L1-düzeyi blend; "GES over penultimate layer" → v1.1+).
+    stack_keys = {c.key for c in candidates if c.family == "stack"}
+    aligned = [r for r in _aligned_reports(reports) if r.candidate_key not in stack_keys]
     if len(aligned) < ec.min_base_models:
         return None
 

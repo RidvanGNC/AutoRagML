@@ -129,6 +129,16 @@ def run_core_pipeline(
         msgs.append(f"doğrulanamayan adaylar: {sorted(failed)}")
         degraded = True
 
+    if not recursive:  # ADR 0034: L2 stacker adayları — GES/1-SE havuzuna eklenir
+        from autoragml.ensembling.stacking import build_stack_layer
+
+        stack_layer = build_stack_layer(reports, candidates, task, config)
+        for st_report, st_cand in stack_layer:
+            reports = [*reports, st_report]
+            candidates = [*candidates, st_cand]
+        if stack_layer:
+            msgs.append(f"stacking: {len(stack_layer)} L2 stacker (saf) eklendi")
+
     ensemble = None if recursive else build_weighted_ensemble(reports, candidates, config, task, profile)
     if ensemble is not None:
         ens_report, ens_candidate, ens_spec = ensemble
