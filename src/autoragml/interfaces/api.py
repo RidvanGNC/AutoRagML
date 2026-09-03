@@ -26,6 +26,35 @@ class LoadedChampion:
             raise RuntimeError(msg)
         return self.bundle.pipeline.predict(features)
 
+    def explain(
+        self,
+        data: Any,
+        *,
+        target: str | None = None,
+        time_col: str | None = None,
+        group_col: str | None = None,
+        method: str = "auto",
+        per_sample: bool = False,
+        sample_size: int = 200,
+    ) -> dict[str, Any]:
+        """Yüklenen şampiyon için öznitelik atıfı (ADR 0037). `target`/`time_col`/`group_col`
+        = ham frame'de öznitelik-olmayan kolonlar (rezerve); verilmezse metadata'dan hedef."""
+        from autoragml.contracts.enums import Modality, Task
+        from autoragml.contracts.task_spec import TaskSpec
+        from autoragml.explain import explain_champion
+
+        task = TaskSpec(
+            task=Task.REGRESSION,  # explain_champion task.task kullanmaz — yalnız reserved kolonlar
+            modality=Modality.TIMESERIES if time_col else Modality.TABULAR,
+            targets=[target or self.bundle.metadata.target_col],
+            time_col=time_col,
+            group_col=group_col,
+        )
+        return explain_champion(
+            self.bundle, data, task, method=method,
+            per_sample=per_sample, sample_size=sample_size,
+        ).model_dump()
+
     @property
     def metadata(self) -> BundleMetadata:
         return self.bundle.metadata
@@ -100,8 +129,13 @@ class AutoRagML:
     def predict(self, features: Any) -> Any:
         return self._require().predict(features)
 
-    def explain(self) -> dict[str, Any]:
-        return self._require().explain()
+    def explain(
+        self, data: Any = None, *, method: str = "auto",
+        per_sample: bool = False, sample_size: int = 200,
+    ) -> dict[str, Any]:
+        return self._require().explain(
+            data, method=method, per_sample=per_sample, sample_size=sample_size
+        )
 
     @classmethod
     def load(cls, bundle_path: str | Path) -> LoadedChampion:

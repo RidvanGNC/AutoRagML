@@ -42,10 +42,21 @@ class RunResult(Contract):
             raise RuntimeError(msg)
         return pipeline.predict(features)
 
-    def explain(self) -> dict[str, Any]:
-        """Seçim gerekçesi + guardrail özeti (v1: yapısal özet)."""
+    def explain(
+        self,
+        data: Any = None,
+        *,
+        method: str = "auto",
+        per_sample: bool = False,
+        sample_size: int = 200,
+    ) -> dict[str, Any]:
+        """Seçim gerekçesi + guardrail özeti + (ADR 0037) öznitelik atıfı.
+
+        `data`: temsili örnek (ham DataFrame) — öznitelik-tabanlı şampiyon için gerekli.
+        SHAP (`[explain]` extra, ağaç/linear) veya model-agnostik permutation.
+        """
         sel = self.engine_result.selection
-        return {
+        out: dict[str, Any] = {
             "champion": sel.champion.model_dump(),
             "selection_rule": sel.selection_rule,
             "promotion": sel.promotion.model_dump(),
@@ -53,3 +64,14 @@ class RunResult(Contract):
             "selection_bias_bound": self.engine_result.scoreboard.selection_bias_bound,
             "warnings": list(self.manifest.warnings),
         }
+        from autoragml.explain import explain_champion
+
+        try:
+            expl = explain_champion(
+                self.champion, data, self.engine_result.task_spec,
+                method=method, per_sample=per_sample, sample_size=sample_size,
+            )
+            out["attribution"] = expl.model_dump()
+        except ValueError as exc:  # data=None + öznitelik-tabanlı şampiyon
+            out["attribution"] = {"method": "skipped", "notes": [str(exc)]}
+        return out

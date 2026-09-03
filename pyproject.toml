@@ -97,7 +97,7 @@ plugins = ["pydantic.mypy"]
 module = [
     "pyarrow.*", "sklearn.*", "scipy.*", "joblib.*", "mlflow.*", "matplotlib.*",
     "torch.*", "pytabkit.*", "pytorch_tabular.*", "omegaconf.*", "neuralforecast.*",
-    "tabpfn.*", "chronos.*", "transformers.*",
+    "tabpfn.*", "chronos.*", "transformers.*", "shap.*",
 ]
 ignore_missing_imports = true
 
