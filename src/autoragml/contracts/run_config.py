@@ -160,6 +160,7 @@ class RunConfig(Contract):
     classical_forecasting: bool = True  # statsforecast native yolu (ADR 0023); büyük panelde yavaş
     forecast_reduction: Literal["direct", "recursive"] = "direct"  # reduction stratejisi (ADR 0026)
     champion_refit_full: bool = True  # ADR 0035: holdout skorundan sonra şampiyonu full veride refit
+    forecast_joint_ensemble: bool = True  # ADR 0035/P2: klasik + reduction ortak cutoff-ızgara GES
 
     # --- nöral (ADR 0030) — yalnız `[neural]` extra kuruluysa etkin ---
     neural_enabled: Literal["auto", "on", "off"] = "auto"  # auto: GPU varsa havuzda, CPU'da değil

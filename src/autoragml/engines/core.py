@@ -43,6 +43,7 @@ def run_core_pipeline(
     tuner: Tuner | None = None,
     messages: list[str] | None = None,
     pre_transform: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
+    raw_frame: pd.DataFrame | None = None,
     run_classical: bool = False,
     run_neural_ts: bool = False,
     run_foundation_ts: bool = False,
@@ -105,8 +106,9 @@ def run_core_pipeline(
         reports = run_validation_suite(
             reduction_cands, frame, plan, profile, task, config, tuner=tuner
         )
+    classical_cv = None
     if classical_cands:
-        cl_reports, cl_extra_cands = run_classical_reports(
+        cl_reports, cl_extra_cands, classical_cv = run_classical_reports(
             frame, profile, task, config, classical_cands
         )
         reports += cl_reports
@@ -129,6 +131,27 @@ def run_core_pipeline(
         failed = {c.key for c in candidates} - validated
         msgs.append(f"doğrulanamayan adaylar: {sorted(failed)}")
         degraded = True
+
+    if (
+        not recursive
+        and config.forecast_joint_ensemble
+        and classical_cv is not None
+        and reduction_cands
+    ):  # ADR 0035/P2: klasik + reduction ortak cutoff ızgarasında tek GES
+        from autoragml.engines.timeseries.joint_ensemble import build_joint_forecast_ensemble
+
+        joint = build_joint_forecast_ensemble(
+            raw_frame if raw_frame is not None else frame,
+            profile, task, config, plan, classical_cv, reduction_cands,
+        )
+        if joint is not None:
+            j_report, j_cand = joint
+            reports = [*reports, j_report]
+            candidates = [*candidates, j_cand]
+            msgs.append(
+                f"joint_ensemble: {len(j_cand.ensemble_members or {})} üye "
+                "(klasik+reduction ortak GES)"
+            )
 
     if not recursive:  # ADR 0034: L2 stacker adayları — GES/1-SE havuzuna eklenir
         from autoragml.ensembling.stacking import build_stack_layer

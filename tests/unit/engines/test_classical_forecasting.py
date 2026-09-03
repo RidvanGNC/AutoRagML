@@ -51,7 +51,8 @@ def test_classical_reports_produced_for_seasonal_panel() -> None:
     classical = [c for c in resolve_candidates(cfg, task) if is_classical(c)]
     assert {c.key for c in classical} >= {"auto_ets", "auto_arima", "croston"}
 
-    reports, extra = run_classical_reports(materialize_frame(ds), profile, task, cfg, classical)
+    reports, extra, cv_grid = run_classical_reports(materialize_frame(ds), profile, task, cfg, classical)
+    assert cv_grid is not None and {"unique_id", "ds", "cutoff", "y"} <= set(cv_grid.cv.columns)
     by_key = {r.candidate_key: r for r in reports}
     assert "auto_ets" in by_key
     ets = by_key["auto_ets"]
@@ -107,7 +108,7 @@ def test_classical_ensemble_refit() -> None:
     df = _panel()
     cfg, ds, profile, task = _prep(df)
     classical = [c for c in resolve_candidates(cfg, task) if is_classical(c)]
-    _, extra = run_classical_reports(materialize_frame(ds), profile, task, cfg, classical)
+    _, extra, _ = run_classical_reports(materialize_frame(ds), profile, task, cfg, classical)
     ens_cand = next(c for c in extra if c.key == "classical_ensemble")
 
     bundle_forecaster = refit_classical_ensemble(ens_cand, classical, df, profile, task, cfg)
@@ -122,4 +123,4 @@ def test_classical_ensemble_refit() -> None:
 def test_no_classical_candidates_returns_empty() -> None:
     df = _panel()
     cfg, ds, profile, task = _prep(df)
-    assert run_classical_reports(materialize_frame(ds), profile, task, cfg, []) == ([], [])
+    assert run_classical_reports(materialize_frame(ds), profile, task, cfg, []) == ([], [], None)

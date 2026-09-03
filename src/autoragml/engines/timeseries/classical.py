@@ -8,6 +8,7 @@ leakage-safe), `fit`/`predict` → serving. GES ensemble'a v1'de girmez (cutoff-
 from __future__ import annotations
 
 import inspect
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -35,6 +36,22 @@ _SEASON_PARAM = "season_length"
 _FREQ_SEASON: dict[str, int] = {"H": 24, "D": 7, "B": 5, "W": 52, "M": 12, "Q": 4, "Y": 1, "A": 1}
 _N_JOBS = -1  # statsforecast serileri kendi executor'ıyla paralelleştirir (Windows'ta güvenli)
 _MAX_CV_WINDOWS = 3  # büyük panelde refit'li CV maliyeti — 3 pencere yeterli
+
+
+@dataclass
+class ClassicalCV:
+    """`run_classical_reports`'un ürettiği rolling-origin cross_validation ızgarası (ADR 0035/P2).
+
+    `cv`: kolonlar `[unique_id, ds, cutoff, _win, y, <alias>...]`. Ortak forecasting ensemble
+    (`joint_ensemble`) reduction modellerini **aynı cutoff'larda** değerlendirip bu ızgaraya
+    kolon ekler → tek GES tüm aileler üzerinde.
+    """
+
+    cv: pd.DataFrame
+    alias_to_key: dict[str, str]
+    horizon: int
+    season: int
+    freq: str
 
 
 def is_classical(candidate: Candidate) -> bool:
@@ -198,16 +215,17 @@ def run_classical_reports(
     task: TaskSpec,
     config: RunConfig,
     candidates: list[Candidate],
-) -> tuple[list[ValidationReport], list[Candidate]]:
-    """Klasik adaylar → `cross_validation` OOF → per-model raporlar + `classical_ensemble` (ADR 0023/0024)."""
+) -> tuple[list[ValidationReport], list[Candidate], ClassicalCV | None]:
+    """Klasik adaylar → `cross_validation` OOF → per-model raporlar + `classical_ensemble` +
+    ortak-ızgara `ClassicalCV` (ADR 0023/0024/0035-P2)."""
     classical = [c for c in candidates if is_classical(c)]
     if not classical:
-        return [], []
+        return [], [], None
     try:
         from statsforecast import StatsForecast
     except ImportError:  # pragma: no cover
         logger.warning("[classical] statsforecast yok — klasik modeller atlandı")
-        return [], []
+        return [], [], None
 
     ndf = _to_nixtla(frame, task)
     freq = _resolve_freq(profile)
@@ -235,7 +253,7 @@ def run_classical_reports(
     cv_df = ndf[ndf["unique_id"].isin(set(keep))].reset_index(drop=True)
     if cv_df["unique_id"].nunique() < 2:
         logger.warning("[classical] CV için yeterli seri yok — klasik modeller atlandı")
-        return [], []
+        return [], [], None
 
     models: list[Any] = []
     alias_to_cand: dict[str, Candidate] = {}
@@ -248,14 +266,14 @@ def run_classical_reports(
         models.append(model)
         alias_to_cand[model.alias] = cand
     if not models:
-        return [], []
+        return [], [], None
 
     sf = StatsForecast(models=models, freq=freq, n_jobs=_N_JOBS, fallback_model=_fallback(season))
     try:
         cv = sf.cross_validation(df=cv_df, h=h, n_windows=n_windows, step_size=h)
     except Exception as exc:  # noqa: BLE001
         logger.warning("[classical] cross_validation başarısız: %s", exc)
-        return [], []
+        return [], [], None
     cv = cv.reset_index() if "unique_id" not in cv.columns else cv
     # Heterojen tarihli panelde cutoff'lar seriye göre değişir → pencere indeksiyle grupla.
     cv["_win"] = cv.groupby("unique_id")["cutoff"].rank(method="dense").astype(int)
@@ -274,7 +292,12 @@ def run_classical_reports(
         reports.append(ens_report)
         extra.append(ens_cand)
     logger.info("[classical] %d model doğrulandı (h=%d, %d pencere, s=%d)", len(reports), h, n_windows, season)
-    return reports, extra
+    cv_grid = ClassicalCV(
+        cv=cv[["unique_id", "ds", "cutoff", "_win", "y", *[a for a in alias_to_cand if a in cv.columns]]].copy(),
+        alias_to_key={a: c.key for a, c in alias_to_cand.items() if a in cv.columns},
+        horizon=h, season=season, freq=freq,
+    )
+    return reports, extra, cv_grid
 
 
 class FittedClassicalForecaster:

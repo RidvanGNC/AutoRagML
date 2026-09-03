@@ -1,6 +1,6 @@
 # ADR 0035 — seçim temizliği (champion refit-on-full · ortak forecasting ensemble · aile-arası tie-break)
 
-**Durum:** Kabul · 2026-09-03 (kullanıcı 3 kararı kilitledi — hepsi önerilen seçenek)
+**Durum:** Kabul · 2026-09-03 · P1+P3 commit `b54f9c4`, P2 commit [pending] — 3 parça da uygulandı
 
 **Kilitli kararlar:**
 - **K1 = (a)** — `EngineResult.finalize` closure; orchestrator holdout skorundan sonra çağırır.
@@ -136,5 +136,23 @@ kullanıyor → heterojen bandda yanlış üye. Tie-break yalnız `_FAMILY_COMPL
 - `RunConfig.champion_refit_full: bool = True`.
 - Testler: `test_champion_refit_full_stage`, `test_champion_refit_full_can_be_disabled`.
 
-### Parça 2 — klasik + reduction ortak forecasting ensemble → **[pending]**
-Ayrı commit (ortak cutoff ızgarası — CV hizalama makinesi).
+### Parça 2 — klasik + reduction ortak forecasting ensemble ✅ (commit [pending])
+- `classical.run_classical_reports` → 3'lü döner: `(reports, extra, ClassicalCV | None)`.
+  `ClassicalCV` = cutoff ızgarası (`cv` DataFrame + alias→key + h/season/freq).
+- `engines/timeseries/joint_ensemble.py`:
+  - `_reduction_cutoff_oof(cand, ...)` — her cutoff için `train ≤ cutoff` fit
+    (`champion._fit_one`), hedef pencereyi `[geçmiş + hedef ds(y=NaN)]` concat predict;
+    `build_reduction_features` `shift ≥ h` → hedef satırlar yalnız `≤ cutoff` `y` görür
+    (**leakage-safe by construction**). `(group, ds)` anahtarıyla `cv` sırasına hizalanır.
+  - `build_joint_forecast_ensemble` — klasik alias sütunları + reduction OOF sütunları →
+    tek `greedy_selection` GES → `joint_ensemble` (`__joint_ensemble__` sentinel, `family=ensemble`).
+    En az 1 reduction üye şartı (yoksa `classical_ensemble` zaten var).
+  - `FittedJointForecaster` — `FittedClassicalForecaster` (klasik üyeler + joint ağırlıkları) +
+    reduction `FittedModelPipeline`'lar (ağırlıklı); `predict` iki parçayı toplar. joblib-picklable.
+- `engines/champion._joint_bundle` — klasik üyeler tek `StatsForecast` + reduction üyeler (bagged).
+- `engines/core.run_core_pipeline(raw_frame=)` — joint GES'ten önce çağrılır; `recursive` modda kapalı.
+- `RunConfig.forecast_joint_ensemble: bool = True`.
+- Testler: `test_joint_ensemble.py` (3 — çok-aile GES / reduction'sız None / refit+serving).
+
+**Uyarı:** P2 benchmark-doğrulanmamış (benchmark ertelendi). Leakage kurgusu `shift ≥ h`'ye
+dayanıyor — nöral blok benchmark'ında öncelikli inceleme.

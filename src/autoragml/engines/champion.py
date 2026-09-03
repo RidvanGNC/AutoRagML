@@ -12,6 +12,7 @@ import hashlib
 import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -34,6 +35,7 @@ from autoragml.engines.timeseries.classical import (
     refit_classical,
     refit_classical_ensemble,
 )
+from autoragml.engines.timeseries.joint_ensemble import JOINT_ENSEMBLE_KEY, FittedJointForecaster
 from autoragml.ensembling import ENSEMBLE_KEY
 from autoragml.ensembling.stacking import STACK_FAMILY
 from autoragml.exceptions import EngineError
@@ -330,6 +332,12 @@ def refit_champion(
     if candidate.family == "foundation_ts":
         return _foundation_ts_bundle(candidate, selection, frame, profile, task, config)
 
+    if key == JOINT_ENSEMBLE_KEY:
+        return _joint_bundle(
+            candidate, candidates, selection, reports, work, plan, profile, task, config,
+            tuner, pre_transform,
+        )
+
     report = next((r for r in reports if r.candidate_key == key), None)
     fit = _fit_pipeline(
         candidate, report, work, plan, profile, task, config, tuner,
@@ -424,6 +432,91 @@ def _foundation_ts_bundle(
         metadata=metadata,
         metrics_oof=dict(champ_row.all_metrics_mean) if champ_row else {},
         pipeline=forecaster,
+    )
+
+
+def _joint_bundle(
+    joint_candidate: Candidate,
+    candidates: list[Candidate],
+    selection: SelectionResult,
+    reports: list[ValidationReport],
+    work: pd.DataFrame,
+    plan: AdaptivePlan,
+    profile: DataProfile,
+    task: TaskSpec,
+    config: RunConfig,
+    tuner: Tuner,
+    pre_transform: Transform | None,
+) -> ModelBundle:
+    """`joint_ensemble` şampiyonu (ADR 0035/P2) — klasik üyeler tek `StatsForecast` +
+    reduction üyeler (bagged) → `FittedJointForecaster`."""
+    from autoragml.engines.timeseries.classical import (
+        _build_model,
+        _fit_forecaster,
+        _resolve_freq,
+        _season_length,
+    )
+
+    members = joint_candidate.ensemble_members or {}
+    kinds_raw = joint_candidate.default_params.get("member_kinds") or {}
+    kinds: dict[str, str] = {}
+    if isinstance(kinds_raw, dict):
+        kinds = {str(k): str(v) for k, v in kinds_raw.items()}
+    by_key = {c.key: c for c in candidates}
+    l1_by_key = {r.candidate_key: r for r in reports}
+    season = _season_length(profile, _resolve_freq(profile))
+
+    cl_models: list[Any] = []
+    cl_weights: list[float] = []
+    red_members: list[tuple[Predictor, float]] = []
+    for mkey, w in members.items():
+        mcand = by_key.get(mkey)
+        if mcand is None:
+            continue
+        if kinds.get(mkey) == "classical":
+            cl_models.append(_build_model(mcand, season))
+            cl_weights.append(float(w))
+        else:
+            fit = _fit_pipeline(
+                mcand, l1_by_key.get(mkey), work, plan, profile, task, config, tuner,
+                with_postproc=False, pre_transform=pre_transform,
+            )
+            red_members.append((fit.pipeline, float(w)))
+    if len(cl_models) + len(red_members) < 2:
+        msg = "joint_ensemble refit: 2'den az üye fit edilebildi"
+        raise EngineError(msg)
+
+    classical = (
+        _fit_forecaster(cl_models, cl_weights, work, profile, task, config) if cl_models else None
+    )
+
+    jr = next((r for r in reports if r.candidate_key == JOINT_ENSEMBLE_KEY), None)
+    oof = getattr(jr, "oof", None)
+    fitted_post, postprocess_summary = _maybe_postproc(
+        True, config, profile, task, getattr(oof, "y_true", None), getattr(oof, "y_pred", None)
+    )
+    pipeline = FittedJointForecaster(
+        classical=classical, reduction=red_members, postprocessor=fitted_post
+    )
+    champ_row = next(
+        (r for r in selection.scoreboard.rows if r.model_key == JOINT_ENSEMBLE_KEY), None
+    )
+    metadata = BundleMetadata(
+        feature_cols=pipeline.feature_cols,
+        feature_set_hash=_feature_hash(pipeline.feature_cols),
+        target_col=task.targets[0],
+        model_key=JOINT_ENSEMBLE_KEY,
+        scenario=selection.champion.scenario,
+        best_iteration=None,
+        adaptive_plan_summary={"structure": "joint_forecast_ensemble"},
+        params={"engine": "statsforecast+reduction"},
+        postprocess_summary=postprocess_summary,
+        ensemble={"members": dict(members), "method": "ges", "kinds": kinds},
+    )
+    return ModelBundle(
+        metadata=metadata,
+        metrics_oof=dict(champ_row.all_metrics_mean) if champ_row else {},
+        pipeline=pipeline,
     )
 
 

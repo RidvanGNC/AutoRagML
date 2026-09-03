@@ -116,6 +116,7 @@ class TimeSeriesCoreEngine:
         return run_core_pipeline(
             self.key, augmented, profile, task, config,
             tuner=tuner, messages=messages, pre_transform=pre_transform,
+            raw_frame=frame,  # ADR 0035/P2 — joint_ensemble ham frame'e cutoff başına refit yapar
             run_classical=config.classical_forecasting,
             run_neural_ts=config.neural_enabled != "off",  # ADR 0032 — kapı neural_gate/reports'ta
             run_foundation_ts=config.foundation_enabled != "off",  # ADR 0033 — kapı foundation_gate'te
