@@ -54,7 +54,7 @@ def tabpfn_weights_cached() -> bool:
 class FoundationTabEstimator:
     """TabPFN'in sklearn-uyumlu sarımı (ADR 0033)."""
 
-    _PARAM_NAMES = ("task_kind", "random_state", "n_estimators", "device", "token_env")
+    _PARAM_NAMES = ("task_kind", "random_state", "n_estimators", "device", "token_env", "backend")
 
     def __init__(
         self,
@@ -64,6 +64,7 @@ class FoundationTabEstimator:
         n_estimators: int = 4,
         device: str = "auto",
         token_env: str = "TABPFN_TOKEN",
+        backend: str = "tabpfn",   # ADR 0040: "tabpfn" (lisans-kapılı) | "tabicl" (auth'suz)
         **_ignored: Any,
     ) -> None:
         self.task_kind = task_kind
@@ -71,6 +72,7 @@ class FoundationTabEstimator:
         self.n_estimators = int(n_estimators)
         self.device = device
         self.token_env = token_env
+        self.backend = backend
         self._model: Any = None
         self._feature_cols: list[str] = []
         self._classes: np.ndarray | None = None
@@ -93,11 +95,16 @@ class FoundationTabEstimator:
         return "cuda" if resolve_device(self.device) == "cuda" else "cpu"
 
     def _build(self) -> Any:
+        dev = self._resolve_device()
+        if self.backend == "tabicl":
+            from tabicl import TabICLClassifier, TabICLRegressor
+
+            common = {"random_state": self.random_state, "device": dev, "allow_auto_download": True}
+            cls = TabICLRegressor if self.task_kind == "regression" else TabICLClassifier
+            return cls(**common)
         ensure_tabpfn_token(self.token_env)
         common = {
-            "n_estimators": self.n_estimators,
-            "random_state": self.random_state,
-            "device": self._resolve_device(),
+            "n_estimators": self.n_estimators, "random_state": self.random_state, "device": dev,
         }
         if self.task_kind == "regression":
             from tabpfn import TabPFNRegressor
@@ -163,6 +170,7 @@ class FoundationTabEstimator:
             n_estimators=self.n_estimators,
             device=self.device,
             token_env=self.token_env,
+            backend=self.backend,
         )
 
     def load(self, directory: str | Path) -> FoundationTabEstimator:
@@ -173,6 +181,7 @@ class FoundationTabEstimator:
         self.n_estimators = int(m["n_estimators"])
         self.device = str(m["device"])
         self.token_env = str(m["token_env"])
+        self.backend = str(m["backend"]) if "backend" in m else "tabpfn"
         self._feature_cols = [str(c) for c in m["feature_cols"]]
         cls = m["classes"]
         self._classes = None if len(cls) == 0 else np.asarray(cls)

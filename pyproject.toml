@@ -43,6 +43,7 @@ neural     = ["pytabkit>=1.7", "torch>=2.2"]   # ADR 0030: RealMLP + TabM (sklea
 neural-nas = ["pytorch-tabular>=1.1"]          # ADR 0031: mimari arama (aile taraması + derin arama)
 neural-ts  = ["neuralforecast>=1.7"]           # ADR 0032: NHITS/PatchTST/TFT/NBEATSx/iTransformer/TSMixer
 foundation         = ["tabpfn>=2.5"]           # ADR 0033: TabPFN (in-context). TABPFN_TOKEN gerekir (.env)
+foundation-tabicl  = ["tabicl>=2.0"]           # ADR 0040: TabICL — auth'suz in-context (clf + reg)
 foundation-ts      = ["chronos-forecasting>=2.1"]  # ADR 0033: Chronos-Bolt zero-shot (torch>=2.2,<3)
 foundation-ts-timesfm = ["timesfm[torch]>=2.5"]    # ADR 0041: Google TimesFM 2.5 zero-shot
 
@@ -100,7 +101,7 @@ plugins = ["pydantic.mypy"]
 module = [
     "pyarrow.*", "sklearn.*", "scipy.*", "joblib.*", "mlflow.*", "matplotlib.*",
     "torch.*", "pytabkit.*", "pytorch_tabular.*", "omegaconf.*", "neuralforecast.*",
-    "tabpfn.*", "chronos.*", "transformers.*", "shap.*", "timesfm.*", "interpret.*", "ngboost.*",
+    "tabpfn.*", "chronos.*", "transformers.*", "shap.*", "timesfm.*", "interpret.*", "ngboost.*", "tabicl.*",
 ]
 ignore_missing_imports = true
 

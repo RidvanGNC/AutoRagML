@@ -39,6 +39,7 @@ _ENV_PACKAGES = (
     "interpret-core",
     "ngboost",
     "timesfm",
+    "tabicl",
 )
 
 

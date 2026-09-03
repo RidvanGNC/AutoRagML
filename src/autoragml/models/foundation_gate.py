@@ -59,30 +59,31 @@ def prepare_foundation_candidates(
         logger.info("[foundation] atlandı (GPU yok / foundation_enabled!=on): %s", sorted(drop))
         return [c for c in candidates if c.key not in drop]
 
-    # --- TabPFN bandı ---
+    # --- in-context tablo bandı (TabPFN / TabICL) ---
     if tab:
         max_rows = _TABPFN_ON_ROWS if mode == "on" else config.foundation_tab_max_rows
         max_feat = _TABPFN_ON_FEATURES if mode == "on" else config.foundation_tab_max_features
         n_rows, n_feat = profile.n_rows, profile.n_cols
-        reasons: list[str] = []
+        band: list[str] = []
         if n_rows > max_rows:
-            reasons.append(f"n_rows={n_rows} > {max_rows}")
+            band.append(f"n_rows={n_rows} > {max_rows}")
         if n_feat > max_feat:
-            reasons.append(f"n_cols={n_feat} > {max_feat}")
-        n_classes = profile.target_summary.n_classes
-        if _classification(task) and n_classes is not None and n_classes > _TABPFN_CLASS_LIMIT:
-            reasons.append(f"n_classes={n_classes} > {_TABPFN_CLASS_LIMIT}")
-        if not reasons:
-            from autoragml.models.foundation_tab import ensure_tabpfn_token, tabpfn_weights_cached
-
-            if not ensure_tabpfn_token(config.foundation_token_env) and not tabpfn_weights_cached():
-                reasons.append(
-                    f"{config.foundation_token_env} yok ve yerel ağırlık cache boş "
-                    "(ux.priorlabs.ai → lisans → token → .env)"
-                )
-        if reasons:
+            band.append(f"n_cols={n_feat} > {max_feat}")
+        if band:
             drop.update(c.key for c in tab)
-            logger.info("[foundation] TabPFN atlandı: %s", "; ".join(reasons))
+            logger.info("[foundation] in-context tablo atlandı: %s", "; ".join(band))
+        else:
+            n_classes = profile.target_summary.n_classes
+            is_pfn = [c for c in tab if str(c.default_params.get("backend", "tabpfn")) == "tabpfn"]
+            # class limiti + token yalnız tabpfn backend (TabICL çok-sınıf + auth'suz)
+            if _classification(task) and n_classes is not None and n_classes > _TABPFN_CLASS_LIMIT:
+                drop.update(c.key for c in is_pfn)
+            if is_pfn and not any(c.key in drop for c in is_pfn):
+                from autoragml.models.foundation_tab import ensure_tabpfn_token, tabpfn_weights_cached
+
+                if not ensure_tabpfn_token(config.foundation_token_env) and not tabpfn_weights_cached():
+                    drop.update(c.key for c in is_pfn)
+                    logger.info("[foundation] TabPFN atlandı: %s yok + cache boş", config.foundation_token_env)
 
     # --- Chronos bandı ---
     ts_keep = [c for c in ts if c.key not in drop]

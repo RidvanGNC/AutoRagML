@@ -35,11 +35,24 @@ GIFT-Eval taraması). Katalog additive genişletme (ADR 0012 deseni) — mimari 
 - `interpret-core` + `ngboost` + `pygam` kuruldu — **`ngboost`/`pygam` scipy 1.18 → 1.16 düşürdü**
   (gevşek pin; core suite yeşil kaldı, sorun yok).
 
+### Tablo foundation — TabICL (araştırma sırası 6, 2026-09-04)
+
+`tabicl` (soda-inria/TabICLv2, `[foundation-tabicl]`) — **auth'suz** in-context tablo modeli;
+TabPFN'e (dormant, lisans-kapılı) açık alternatif. `FoundationTabEstimator` `backend` alanı
+kazandı: `"tabpfn"` (varsayılan, lisans-kapılı) | `"tabicl"` (v2 clf **+ reg**, permissive lisans,
+`allow_auto_download=True` → HF, token yok). Katalog `tabicl` `enabled: true`.
+
+`foundation_gate` güncel: satır/öznitelik bandı **her iki backend'e**; `_TABPFN_CLASS_LIMIT` (≤10)
++ token kontrolü **yalnız `backend=="tabpfn"`** adaylarına (TabICL çok-sınıf + auth'suz).
+`FoundationTabEstimator.save/load` `backend` alanını korur (geri-uyum: yoksa `"tabpfn"`).
+
+`ModernNCA` → pytabkit'te yok, ayrı repo temiz sklearn wrapper sunmuyor → ertelendi.
+
 ## Ertelenenler / kapsam dışı
 
 - **GAM** (`pygam`) — sklearn API'si tam uyumlu değil (`get_params` yok, `terms` spec, NaN yok);
   ayrıca EBM zaten bir GAM (cam-kutu). Gerekirse wrapper ile sonra.
-- **TabICL / ModernNCA / xRFM / Mitra** (TabArena roster) → araştırma sırası 6 (opsiyonel).
+- **ModernNCA / xRFM / Mitra** (TabArena roster) → gerekirse sonra.
 - **TimesFM / Moirai** → araştırma sırası 5 (ayrı iş).
 - SVR/SVC katalogda ama `enabled: false` — büyük veride O(n²) tehlikeli.
 

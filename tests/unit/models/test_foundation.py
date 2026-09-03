@@ -71,6 +71,7 @@ def test_foundation_catalog_present() -> None:
     cat = load_catalog()
     assert "tabpfn" in cat
     assert cat["tabpfn"].get("enabled") is False  # KULLANICI KARARI: lisans-kapılı → varsayılan kapalı
+    assert "tabicl" in cat and cat["tabicl"]["default_params"]["backend"] == "tabicl"  # ADR 0040 — auth'suz
     assert {"chronos_bolt", "chronos_bolt_small", "timesfm_2p5"} <= set(cat)  # ADR 0041: TimesFM
     assert cat["chronos_2"].get("enabled") is False  # opsiyonel
     assert cat["chronos_bolt"]["default_params"]["backend"] == "chronos"
@@ -85,6 +86,25 @@ def test_is_foundation_ts() -> None:
 @pytest.mark.skipif(_HAS_TABPFN, reason="tabpfn kurulu — 'yok' senaryosu")
 def test_tabpfn_skipped_without_lib() -> None:
     assert "tabpfn" not in {c.key for c in build_candidates(_cfg(foundation_enabled="on"))}
+
+
+def test_tabicl_gate_no_token_needed(monkeypatch) -> None:
+    """ADR 0040: TabICL auth'suz — TabPFN token yokluğu onu düşürmez."""
+    monkeypatch.setattr("autoragml.models.foundation_gate.has_cuda", lambda: True)
+    monkeypatch.setattr("autoragml.models.foundation_tab.ensure_tabpfn_token", lambda _e: False)
+    monkeypatch.setattr("autoragml.models.foundation_tab.tabpfn_weights_cached", lambda: False)
+    prof, task = _tab_profile(n_rows=300)
+    tabicl = Candidate(
+        key="tabicl", name="tabicl", family="foundation", class_path="__foundation_tab__",
+        modalities=[Modality.TABULAR], tasks=[Task.REGRESSION],
+        default_params={"backend": "tabicl", "random_state": 42},
+    )
+    out = prepare_foundation_candidates(
+        [tabicl, _tab_cand()], prof, task, _cfg(foundation_enabled="on", foundation_tab_max_rows=1000)
+    )
+    keys = [c.key for c in out]
+    assert "tabicl" in keys      # token gerekmez
+    assert "tabpfn" not in keys  # token yok → düşer
 
 
 @pytest.mark.skipif(_HAS_CHRONOS, reason="chronos kurulu — 'yok' senaryosu")
