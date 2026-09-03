@@ -65,7 +65,7 @@ def test_joint_ensemble_builds_across_families() -> None:
     _, _, cv_grid = run_classical_reports(frame, profile, task, cfg, classical)
     assert cv_grid is not None
 
-    joint = build_joint_forecast_ensemble(frame, profile, task, cfg, plan, cv_grid, reduction)
+    joint = build_joint_forecast_ensemble(frame, profile, task, cfg, plan, cv_grid, reduction, [])
     if joint is None:
         pytest.skip("joint GES tek üyeye indi (küçük sentetik panel) — mekanizma yine de test_none'da")
     report, cand = joint
@@ -105,7 +105,7 @@ def test_joint_builds_on_heterogeneous_panel() -> None:
 
     _, _, cv_grid = run_classical_reports(frame, profile, task, cfg, classical)
     assert cv_grid is not None
-    joint = build_joint_forecast_ensemble(frame, profile, task, cfg, plan, cv_grid, reduction)
+    joint = build_joint_forecast_ensemble(frame, profile, task, cfg, plan, cv_grid, reduction, [])
     assert joint is not None, "heterojen panelde joint kurulmalı (_win bazlı gruplama)"
     _report, cand = joint
     kinds = cand.default_params["member_kinds"]
@@ -117,7 +117,7 @@ def test_joint_none_without_reduction() -> None:
     classical = [c for c in resolve_candidates(cfg, task) if is_classical(c)]
     _, _, cv_grid = run_classical_reports(frame, profile, task, cfg, classical)
     assert cv_grid is not None
-    assert build_joint_forecast_ensemble(frame, profile, task, cfg, plan, cv_grid, []) is None
+    assert build_joint_forecast_ensemble(frame, profile, task, cfg, plan, cv_grid, [], []) is None
 
 
 def test_joint_champion_refit_and_serving() -> None:
@@ -128,7 +128,7 @@ def test_joint_champion_refit_and_serving() -> None:
 
     cl_reports, cl_extra, cv_grid = run_classical_reports(frame, profile, task, cfg, classical)
     red_reports = run_validation_suite(reduction, aug, plan, profile, task, cfg)
-    joint = build_joint_forecast_ensemble(frame, profile, task, cfg, plan, cv_grid, reduction)
+    joint = build_joint_forecast_ensemble(frame, profile, task, cfg, plan, cv_grid, reduction, [])
     if joint is None:
         pytest.skip("joint tek üyeye indi")
     j_report, j_cand = joint

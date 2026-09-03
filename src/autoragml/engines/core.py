@@ -142,7 +142,7 @@ def run_core_pipeline(
 
         joint = build_joint_forecast_ensemble(
             raw_frame if raw_frame is not None else frame,
-            profile, task, config, plan, classical_cv, reduction_cands,
+            profile, task, config, plan, classical_cv, reduction_cands, reports,
         )
         if joint is not None:
             j_report, j_cand = joint

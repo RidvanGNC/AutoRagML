@@ -41,6 +41,10 @@ _Arr = npt.NDArray[np.float64]
 JOINT_ENSEMBLE_KEY = "joint_ensemble"
 _JOINT_CLASS_PATH = "__joint_ensemble__"
 _MIN_MEMBERS = 2
+# joint reduction üyeleri = yalnız klasik-tablo aileleri. `neural`/`foundation` cutoff başına
+# yeniden fit çok pahalı (pytabkit/torch) + bu ailelerin panel-forecasting değeri sınırlı.
+_REDUCTION_FAMILIES = {"gbdt", "forest", "linear", "ml", "distance", "statistical_ml"}
+_MAX_REDUCTION_MEMBERS = 6  # en iyi N reduction adayı (fold-OOF sırasına göre) → cutoff maliyeti sınırı
 
 
 def _reduce_only(frame: pd.DataFrame, task: TaskSpec, horizon: int, season: int) -> pd.DataFrame:
@@ -164,6 +168,23 @@ def _reduction_cutoff_oof(
     return out if not np.isnan(out).any() else None
 
 
+def _rank_reduction(
+    candidates: list[Candidate], reports: list[ValidationReport], primary: str, lower: bool
+) -> list[Candidate]:
+    """Klasik-tablo reduction adayları, mevcut fold-OOF primary metriğine göre sıralı, en iyi N."""
+    by_key = {r.candidate_key: r for r in reports}
+
+    def score(c: Candidate) -> float:
+        m = by_key.get(c.key)
+        v = m.oof_metrics.get(primary) if m else None
+        if v is None or not np.isfinite(v):
+            return float("inf")
+        return v if lower else -v
+
+    elig = [c for c in candidates if c.family in _REDUCTION_FAMILIES]
+    return sorted(elig, key=score)[:_MAX_REDUCTION_MEMBERS]
+
+
 def build_joint_forecast_ensemble(
     raw_frame: pd.DataFrame,
     profile: DataProfile,
@@ -172,6 +193,7 @@ def build_joint_forecast_ensemble(
     plan: AdaptivePlan,
     classical_cv: ClassicalCV,
     reduction_candidates: list[Candidate],
+    reduction_reports: list[ValidationReport],
 ) -> tuple[ValidationReport, Candidate] | None:
     """Klasik + reduction OOF'unu ortak cutoff ızgarasında birleştir → tek GES → `joint_ensemble`."""
     cv = classical_cv.cv.reset_index(drop=True)
@@ -179,6 +201,8 @@ def build_joint_forecast_ensemble(
     y_true = cv["y"].to_numpy(dtype=np.float64)
     group = cv["unique_id"].to_numpy().astype(object)
 
+    primary = config.primary_metric or default_primary_metric(task.task)
+    lower = lower_is_better(primary)
     choices = {g.group_name: g.default for g in plan.candidate_ops}
     cols: dict[str, _Arr] = {}
     kinds: dict[str, str] = {}
@@ -190,7 +214,10 @@ def build_joint_forecast_ensemble(
                 cols[key] = col
                 kinds[key] = "classical"
 
-    for cand in reduction_candidates:
+    ranked = _rank_reduction(reduction_candidates, reduction_reports, primary, lower)
+    logger.info("[joint] cutoff ızgarasında değerlendirilecek reduction adayları: %s",
+                [c.key for c in ranked])
+    for cand in ranked:
         oof = _reduction_cutoff_oof(cand, choices, raw_frame, cv, plan, profile, task, config, h, season)
         if oof is not None and np.isfinite(oof).all():
             cols[cand.key] = oof
@@ -204,8 +231,6 @@ def build_joint_forecast_ensemble(
 
     keys = list(cols)
     preds = np.column_stack([cols[k] for k in keys])
-    primary = config.primary_metric or default_primary_metric(task.task)
-    lower = lower_is_better(primary)
 
     def metric_fn(yt: np.ndarray, yp: np.ndarray) -> float:
         return compute_metrics(yt, yp, task.task).get(primary, float("inf"))
