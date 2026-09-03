@@ -17,6 +17,7 @@ import pandas as pd
 from autoragml.contracts.adaptive_plan import AdaptivePlan
 from autoragml.contracts.candidate import Candidate
 from autoragml.contracts.data_profile import DataProfile
+from autoragml.contracts.enums import Task
 from autoragml.contracts.plan_context import PlanContext
 from autoragml.contracts.run_config import RunConfig
 from autoragml.contracts.task_spec import TaskSpec
@@ -25,7 +26,7 @@ from autoragml.contracts.validation import FoldReport, ValidationReport
 from autoragml.logging import get_logger
 from autoragml.models import build_estimator
 from autoragml.preprocessors import FeaturePipeline, TargetTransform
-from autoragml.scoring.metrics import compute_metrics
+from autoragml.scoring.metrics import compute_metrics, compute_proba_metrics
 from autoragml.validators.frame_ops import (
     OOFArrays,
     column_roles,
@@ -42,6 +43,30 @@ from autoragml.validators.splitters import Fold, Splitter, resolve_splitter
 logger = get_logger(__name__)
 
 _Arr = npt.NDArray[np.float64]
+_CLASSIFICATION_TASKS = {
+    Task.BINARY_CLASSIFICATION,
+    Task.MULTICLASS_CLASSIFICATION,
+}
+
+
+def _predict_proba(estimator: Any, x: pd.DataFrame, task: TaskSpec) -> _Arr | None:
+    """Sınıflandırmada `predict_proba` (ADR 0036) — yoksa/patlarsa `None`."""
+    if task.task not in _CLASSIFICATION_TASKS or not hasattr(estimator, "predict_proba"):
+        return None
+    try:
+        proba = np.asarray(estimator.predict_proba(x), dtype=np.float64)
+    except Exception:  # noqa: BLE001
+        return None
+    return proba if proba.ndim == 2 and proba.shape[0] == len(x) else None
+
+
+def _estimator_classes(estimator: Any, y: np.ndarray) -> np.ndarray:
+    """Estimator'ın sınıf sırası (`classes_` / `_classes`), yoksa `np.unique(y)`."""
+    for attr in ("classes_", "_classes"):
+        c = getattr(estimator, attr, None)
+        if c is not None:
+            return np.asarray(c)
+    return np.unique(np.asarray(y))
 
 
 @dataclass
@@ -112,6 +137,7 @@ def run_validation(
     oof_true: list[_Arr] = []
     oof_pred: list[_Arr] = []
     oof_group: list[np.ndarray] = []
+    oof_proba: list[_Arr | None] = []
     all_violations = []
     any_nested = False
 
@@ -161,6 +187,12 @@ def run_validation(
         y_pred = tt.inverse(np.asarray(est.predict(x_test), dtype=np.float64), ref=ref_test)
         metrics = compute_metrics(y_test, y_pred, task.task)
 
+        proba = _predict_proba(est, x_test, task)  # ADR 0036: sınıflandırma olasılık OOF
+        if proba is not None:
+            fold_classes = _estimator_classes(est, y_train)
+            metrics.update(compute_proba_metrics(y_test, proba, classes=fold_classes))
+        oof_proba.append(proba)
+
         fold_reports.append(
             FoldReport(
                 fold_id=fold.fold_id,
@@ -182,6 +214,16 @@ def run_validation(
     oof_metrics = compute_metrics(oof_t, oof_p, task.task)
     group_arr = np.concatenate(oof_group) if len(oof_group) == len(fold_reports) and oof_group else None
 
+    oof_proba_arr: _Arr | None = None
+    oof_classes: np.ndarray | None = None
+    if oof_proba and all(p is not None for p in oof_proba) and len(oof_proba) == len(fold_reports):
+        try:
+            oof_proba_arr = np.vstack([np.asarray(p, dtype=np.float64) for p in oof_proba])
+            oof_classes = _estimator_classes(None, oof_t)  # etiket kümesi = tüm OOF benzersizleri
+            oof_metrics.update(compute_proba_metrics(oof_t, oof_proba_arr, classes=oof_classes))
+        except ValueError:
+            oof_proba_arr, oof_classes = None, None
+
     oof_se: dict[str, float] = {}
     if len(fold_reports) >= 2:
         for key in oof_metrics:
@@ -200,7 +242,10 @@ def run_validation(
         leakage=merge_leakage(all_violations),
         nested=any_nested,
         realized_seconds=round(time.perf_counter() - start, 3),
-        oof=OOFArrays(y_true=oof_t, y_pred=oof_p, group=group_arr),
+        oof=OOFArrays(
+            y_true=oof_t, y_pred=oof_p, group=group_arr,
+            y_proba=oof_proba_arr, classes=oof_classes,
+        ),
     )
 
 

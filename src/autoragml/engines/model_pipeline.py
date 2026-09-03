@@ -86,6 +86,25 @@ class FittedModelPipeline:
             out = self._postprocessor.apply(out)
         return out
 
+    def _design_matrix(self, frame: pd.DataFrame) -> pd.DataFrame:
+        if self._pre_transform is not None:
+            frame = self._pre_transform(frame)
+        transformed = self._feature_pipeline.apply(frame)
+        x = transformed.drop(
+            columns=[c for c in self._reserved if c in transformed.columns], errors="ignore"
+        )
+        x = x.reindex(columns=self._feature_cols, fill_value=0.0)
+        out: pd.DataFrame = x.apply(pd.to_numeric, errors="coerce").fillna(0.0)
+        return out
+
+    def predict_proba(self, frame: pd.DataFrame) -> _Arr:
+        """Sınıflandırma olasılık matrisi (ADR 0036) — estimator `predict_proba` sunmalı."""
+        return np.asarray(self._estimator.predict_proba(self._design_matrix(frame)), dtype=np.float64)
+
+    @property
+    def classes(self) -> Any:
+        return getattr(self._estimator, "classes_", getattr(self._estimator, "_classes", None))
+
     @property
     def feature_cols(self) -> list[str]:
         return list(self._feature_cols)

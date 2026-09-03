@@ -29,11 +29,17 @@ _Arr = npt.NDArray[np.float64]
 
 @dataclass
 class OOFArrays:
-    """Out-of-fold tahminler — `scoring` class-weighted skoru + guardrail için."""
+    """Out-of-fold tahminler — `scoring` class-weighted skoru + guardrail + GES için.
+
+    `y_proba` (ADR 0036): sınıflandırmada n×C olasılık matrisi (`classes` sütun sırasıyla);
+    `predict_proba` sunmayan estimator'da `None`.
+    """
 
     y_true: _Arr
     y_pred: _Arr
     group: npt.NDArray[np.object_] | None = None
+    y_proba: _Arr | None = None
+    classes: npt.NDArray[Any] | None = None
 
 
 def prediction_health(y_true: _Arr, y_pred: _Arr) -> dict[str, float]:

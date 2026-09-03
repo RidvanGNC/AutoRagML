@@ -84,6 +84,55 @@ def greedy_selection(
     return counts / total if total > 0 else counts
 
 
+def greedy_selection_proba(
+    proba_stack: _Arr,
+    y_true: _Arr,
+    *,
+    metric_fn: MetricFn,
+    lower_is_better: bool,
+    max_models: int,
+    sorted_init_k: int = 1,
+) -> _Arr:
+    """Olasılık GES (ADR 0036) — `proba_stack` (m, n, C) → ağırlık (m,), toplamı 1.
+
+    `greedy_selection` ile aynı Caruana döngüsü; ortalama **olasılık matrisi** üstünde.
+    `metric_fn(y_true, mean_proba)` — mean_proba (n, C).
+    """
+    m = proba_stack.shape[0]
+    if m == 1:
+        return np.array([1.0])
+
+    def score(mean_proba: _Arr) -> float:
+        v = metric_fn(y_true, mean_proba)
+        return float("inf") if not np.isfinite(v) else (float(v) if lower_is_better else -float(v))
+
+    single = np.array([score(proba_stack[j]) for j in range(m)])
+    order = np.argsort(single, kind="stable")
+    picks: list[int] = [int(j) for j in order[: max(1, sorted_init_k)]]
+    ens_sum = proba_stack[picks].sum(axis=0)
+    best_score = score(ens_sum / len(picks))
+    best_len = len(picks)
+
+    for _ in range(max_models):
+        k = len(picks)
+        scores = np.round(
+            np.array([score((ens_sum + proba_stack[j]) / (k + 1)) for j in range(m)]), 6
+        )
+        tied = np.flatnonzero(scores == scores.min())
+        in_ens = [int(t) for t in tied if t in picks]
+        chosen = in_ens[0] if in_ens else int(tied[0])
+        picks.append(chosen)
+        ens_sum = ens_sum + proba_stack[chosen]
+        cur = score(ens_sum / len(picks))
+        if cur < best_score - 1e-12:
+            best_score, best_len = cur, len(picks)
+
+    picks = picks[:best_len] if best_len > 0 else picks[:1]
+    counts = np.bincount(picks, minlength=m).astype(np.float64)
+    total = counts.sum()
+    return counts / total if total > 0 else counts
+
+
 def bagged_greedy_selection(
     predictions: _Arr,
     y_true: _Arr,

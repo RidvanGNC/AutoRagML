@@ -68,11 +68,15 @@ def test_bagging_folds_configurable() -> None:
     assert len(bundle.pipeline.members) == 3  # type: ignore[union-attr]
 
 
-def test_classification_not_bagged_predictions_discrete() -> None:
+def test_classification_bagged_or_ensembled_discrete() -> None:
+    """ADR 0036: sınıflandırma artık bag/GES'e girer (olasılık ort. → argmax); tahmin ayrık."""
     bundle, df = _champion(_cls_df(), task_hint="binary_classification")
-    assert isinstance(bundle.pipeline, FittedModelPipeline)  # v1: sınıflandırma bag'lenmez
+    assert isinstance(bundle.pipeline, FittedModelPipeline | FittedEnsemblePipeline)
     pred = bundle.pipeline.predict(_cls_df(50))
     assert set(np.unique(pred)).issubset({0.0, 1.0})
+    if isinstance(bundle.pipeline, FittedEnsemblePipeline):
+        proba = bundle.pipeline.predict_proba(_cls_df(50))
+        assert proba.shape == (50, 2) and np.allclose(proba.sum(axis=1), 1.0, atol=1e-6)
 
 
 def test_small_data_falls_back_to_single() -> None:

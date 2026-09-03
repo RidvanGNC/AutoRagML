@@ -59,9 +59,12 @@ logger = get_logger(__name__)
 
 Transform = Callable[[pd.DataFrame], pd.DataFrame]
 
-# v1: bagging yalnız regresyon/forecasting — sınıflandırmada hard-label ortalaması sürekli
-# değer üretir (olasılık ortalaması + argmax → v1.1, sınıflandırma GES ile birlikte).
-_BAGGABLE_TASKS = {Task.REGRESSION, Task.FORECASTING, Task.QUANTILE_REGRESSION, Task.ORDINAL_REGRESSION}
+# ADR 0036: sınıflandırma bagging = fold `predict_proba` ortalaması → argmax.
+_CLASSIFICATION_TASKS = {Task.BINARY_CLASSIFICATION, Task.MULTICLASS_CLASSIFICATION}
+_BAGGABLE_TASKS = {
+    Task.REGRESSION, Task.FORECASTING, Task.QUANTILE_REGRESSION, Task.ORDINAL_REGRESSION,
+    *_CLASSIFICATION_TASKS,
+}
 
 
 def _feature_hash(cols: list[str]) -> str:
@@ -236,11 +239,13 @@ def _fit_pipeline(
         fitted_post, summary = _maybe_postproc(
             with_postproc, config, profile, task, np.concatenate(oof_true), np.concatenate(oof_pred)
         )
+        bag_classes = members[0].classes if task.task in _CLASSIFICATION_TASKS else None
         bag = FittedEnsemblePipeline(
             members=members,
             weights=[1.0 / len(members)] * len(members),
             pre_transform=pre_transform,
             postprocessor=fitted_post,
+            classes=bag_classes,  # ADR 0036: sınıflandırma → olasılık ortalaması + argmax
         )
         return _FitResult(
             pipeline=bag,
@@ -724,8 +729,12 @@ def _refit_ensemble(
         True, config, profile, task, getattr(oof, "y_true", None), getattr(oof, "y_pred", None)
     )
 
+    ens_classes = (
+        getattr(fitted[0], "classes", None) if task.task in _CLASSIFICATION_TASKS else None
+    )
     pipeline = FittedEnsemblePipeline(
-        members=fitted, weights=weights, pre_transform=pre_transform, postprocessor=fitted_post
+        members=fitted, weights=weights, pre_transform=pre_transform,
+        postprocessor=fitted_post, classes=ens_classes,  # ADR 0036
     )
     feature_cols = pipeline.feature_cols
     champ_row = next((r for r in selection.scoreboard.rows if r.model_key == ENSEMBLE_KEY), None)

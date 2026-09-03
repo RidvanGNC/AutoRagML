@@ -22,6 +22,11 @@ _REGRESSION_TASKS = {
 }
 LOWER_IS_BETTER = {"smape", "mape", "wmape", "rmse", "mae", "abs_bias", "log_loss"}
 HIGHER_IS_BETTER = {"csl", "accuracy", "f1_macro", "balanced_accuracy", "roc_auc"}
+PROBA_METRICS = {"log_loss", "roc_auc"}  # ADR 0036: olasılık girdisi gerektiren metrikler
+
+
+def is_proba_metric(metric: str) -> bool:
+    return metric in PROBA_METRICS
 
 
 def _arrays(y_true: object, y_pred: object) -> tuple[_Arr, _Arr]:
@@ -103,6 +108,40 @@ def compute_metrics(y_true: object, y_pred: object, task: Task) -> dict[str, flo
     if task in _REGRESSION_TASKS:
         return _regression_metrics(y_true, y_pred)
     return _classification_metrics(y_true, y_pred)
+
+
+def compute_proba_metrics(
+    y_true: object, y_proba: object, *, classes: object | None = None
+) -> dict[str, float]:
+    """Olasılık tabanlı sınıflandırma metrikleri (ADR 0036): log_loss + roc_auc + argmax nokta.
+
+    `y_proba` (n×C) sütun sırası `classes` ile hizalı olmalı (yoksa `np.unique(y_true)`).
+    """
+    import contextlib
+
+    from sklearn.metrics import log_loss, roc_auc_score
+
+    yt = np.asarray(y_true).ravel()
+    proba = np.asarray(y_proba, dtype=np.float64)
+    if proba.ndim == 1:  # ikili: P(pozitif sınıf)
+        proba = np.column_stack([1.0 - proba, proba])
+    labels = np.asarray(classes) if classes is not None else np.unique(yt)
+    proba = np.clip(proba, 1e-12, 1.0)
+    proba = proba / proba.sum(axis=1, keepdims=True)
+
+    out: dict[str, float] = {}
+    with contextlib.suppress(ValueError, IndexError):
+        out["log_loss"] = float(log_loss(yt, proba, labels=list(labels)))
+    with contextlib.suppress(ValueError, IndexError):
+        if proba.shape[1] == 2:
+            out["roc_auc"] = float(roc_auc_score((yt == labels[1]).astype(int), proba[:, 1]))
+        else:
+            out["roc_auc"] = float(
+                roc_auc_score(yt, proba, multi_class="ovr", average="macro", labels=list(labels))
+            )
+    argmax_pred = labels[np.argmax(proba, axis=1)]
+    out.update(_classification_metrics(yt, argmax_pred))
+    return out
 
 
 def default_primary_metric(task: Task) -> str:
