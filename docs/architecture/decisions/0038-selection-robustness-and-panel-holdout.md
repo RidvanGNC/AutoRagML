@@ -67,6 +67,30 @@ global-cutoff mantığı.
 - Fold-eğilimli bozulma tespiti (son fold >> önceki fold'lar → karantina) → v1.1+.
 - Forecasting'e özel `_FAMILY_COMPLEXITY` → gerekmedi (SE filtresi yeterli).
 
-## Sonuç (UYGULANDI — commit [pending])
+## Sonuç (UYGULANDI — commit 6dd7ff4, 2026-09-03)
 
-_(m3 re-run sonrası doldurulacak)_
+- `scoring/selection._within_one_se` — `_SE_BAND_MULT = 2.0`; `r.oof_metric_se > 2·band` → banttan
+  dışlanır (`best` hariç; `noise_floor ≤ 0` → filtre atlanır).
+- `interfaces/holdout._ts_holdout` — `group_col` varsa `cumcount(ascending=False) < k` per-seri;
+  `series_len > 2·k` koruması. Tek seri → global cutoff.
+- Testler: `test_se_band_filter_excludes_unstable_candidate`,
+  `test_ts_holdout_heterogeneous_panel_per_series`.
+
+### m3 re-run (v4) — düzeltme doğrulandı
+
+| | v3 (bozuk) | v4 (ADR 0038) |
+|---|---|---|
+| şampiyon | lightgbm (gbdt) | **patchtst** (neural_ts) |
+| test sMAPE | 44.7 (**−202%** vs naive) | **16.26 (−9.9%)** |
+| holdout bias | +3462 | −180 |
+| internal holdout | 249 satır (%4) | **5652 satır** (tam); sMAPE 16.65 ≈ test 16.26 |
+
+SE-band filtresi kararsız reduction'ı (lightgbm SE 1.76) eledi → şampiyon düzgün ekstrapole
+eden `patchtst`. Per-seri holdout → internal holdout testi **doğru tahmin ediyor** (16.65 vs 16.26).
+"no_improvement" = M3 monthly seasonal-naive'i (14.8) geçemedi — tarihsel `auto_ets` (−7.9%)
+seviyesinde; **regresyon değil**.
+
+### Yan bulgu (ayrı commit 24af8c3)
+
+Regresyon suite: `RidgeClassifier.predict_proba` yok → ADR 0036 sınıflandırma bagging çöküyordu.
+`FittedModelPipeline.supports_proba`; sınıflandırmada `PredictKind.PROBA` yoksa bagging kapalı.
