@@ -8,9 +8,6 @@ Mimari config `__init__`'te; `family ∈ {mlp, gandalf, ft_transformer}`. `build
 
 from __future__ import annotations
 
-import contextlib
-import os
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +16,9 @@ import numpy.typing as npt
 import pandas as pd
 
 from autoragml.logging import get_logger
-from autoragml.models.torch_env import configure_torch, resolve_device
+from autoragml.models.torch_env import configure_torch, quiet_cwd, resolve_device
+
+_quiet_cwd = quiet_cwd
 
 logger = get_logger(__name__)
 
@@ -29,18 +28,6 @@ _TARGET = "__nas_y__"
 # Aile taraması adayları (ADR 0031 Aşama A). Kullanıcı `neural_families.yaml` ile kısaltabilir.
 FAMILIES = ("mlp", "gandalf", "ft_transformer")
 _ACTIVATIONS = ("ReLU", "GELU", "Mish", "LeakyReLU")
-
-
-@contextlib.contextmanager
-def _quiet_cwd() -> Any:
-    """pytorch_tabular `lightning_logs/` `.pt_tmp/` vb.'ni geçici dizine yaz (proje kirlenmesin)."""
-    prev = os.getcwd()
-    with tempfile.TemporaryDirectory(prefix="autoragml_nas_") as d:
-        os.chdir(d)
-        try:
-            yield
-        finally:
-            os.chdir(prev)
 
 
 def _layer_widths(n_layers: int, width: int, scaling: str) -> list[int]:

@@ -9,6 +9,8 @@ from __future__ import annotations
 import contextlib
 import os
 import random
+import tempfile
+from collections.abc import Iterator
 from functools import lru_cache
 from typing import Literal
 
@@ -17,6 +19,19 @@ from autoragml.logging import get_logger
 logger = get_logger(__name__)
 
 DeterminismMode = Literal["strict", "best_effort", "off"]
+
+
+@contextlib.contextmanager
+def quiet_cwd() -> Iterator[None]:
+    """pytorch_tabular / neuralforecast CWD'ye `lightning_logs/` `.pt_tmp/` yazar — geçici dizine
+    yönlendir (kullanıcı proje dizini kirlenmesin). ADR 0030/0031/0032."""
+    prev = os.getcwd()
+    with tempfile.TemporaryDirectory(prefix="autoragml_nn_") as d:
+        os.chdir(d)
+        try:
+            yield
+        finally:
+            os.chdir(prev)
 
 _configured = False
 

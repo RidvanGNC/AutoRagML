@@ -9,6 +9,16 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 ## [Unreleased]
 
 ### Eklendi (v1.1)
+- **Nöral forecasting katmanı** (ADR 0032) — `[neural-ts]` extra: `neuralforecast`. Native panel
+  yolu (ADR 0023 klasik deseni): `NeuralForecast.cross_validation` → OOF, `.fit`/`.predict` → serving.
+  Modeller: NHITS · PatchTST · TFT · NBEATSx · iTransformer · TSMixer (+ `neural_search=True` →
+  `AutoNHITS`/`AutoPatchTST`/`AutoTFT`, kütüphane HPO). `neural_enabled=auto` iken **yalnız GPU**
+  (CPU'da CV çok pahalı); `neural_ts_min_series` (20) kapısı.
+  - `engines/timeseries/neural_ts.py`: `run_neural_ts_reports` + `FittedNeuralForecaster` +
+    `refit_neural_ts`. `run_core_pipeline(run_neural_ts=)`. `champion._neural_ts_bundle`.
+  - Serving: `persistence.bundle` `champion_neural_ts/` sidecar (`NeuralForecast.save`/`load`).
+  - **Bağımlılık:** neuralforecast → `torch≥2.9.1` → `torch 2.14.0+cu126` (`[neural]`+`[neural-nas]`+
+    `[neural-ts]` tek venv'de çalışır ama kırılgan — üretimde ayrı venv önerilir).
 - **Nöral mimari arama** (ADR 0031) — `[neural-nas]` extra: `pytorch-tabular`. `neural_search=True`
   ile iki aşama: **A)** aile taraması (MLP · GANDALF · FT-Transformer, kısa epoch) → en iyi ≤2 aile ·
   **B)** kazanan ailede koşullu mimari+HP arama (`n_layers` → `layer_width`/`residual`/`activation`/

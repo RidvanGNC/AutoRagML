@@ -172,6 +172,10 @@ class RunConfig(Contract):
     neural_search_space: Literal["small", "full"] = "small"
     neural_search_budget_seconds: int | None = Field(default=None, ge=1)  # yoksa 3600s tavan
 
+    # --- nöral forecasting (ADR 0032) — `[neural-ts]` extra; CPU'da auto-modda dışlanır ---
+    neural_ts_min_series: int = Field(default=20, ge=2)  # altında nöral-TS atlanır
+    neural_ts_min_history_mult: float = Field(default=3.0, gt=0.0)  # seri ≥ mult · season · h
+
     @model_validator(mode="after")
     def _post_checks(self) -> RunConfig:
         if self.task_hint is Task.FORECASTING and self.time_col is None:

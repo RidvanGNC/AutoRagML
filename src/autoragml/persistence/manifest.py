@@ -31,6 +31,8 @@ _ENV_PACKAGES = (
     "joblib",
     "torch",
     "pytabkit",
+    "pytorch-tabular",
+    "neuralforecast",
 )
 
 

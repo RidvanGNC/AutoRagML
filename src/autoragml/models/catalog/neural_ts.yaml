@@ -1,0 +1,87 @@
+description: >
+  Nöral forecasting modelleri (ADR 0032). `[neural-ts]` extra: neuralforecast.
+  Native panel yolu — `NeuralForecast.cross_validation` → OOF, `.fit`/`.predict` → serving
+  (ADR 0023 klasik deseni). Reduction pipeline'ından geçmez. `neural_enabled=auto` iken
+  yalnız GPU (CPU'da CV çok pahalı). `neural_search=True` → kütüphane `Auto*` (aşağıda ayrı).
+
+nhits:
+  name: NHITS
+  family: neural_ts
+  class_path: {regression: neuralforecast.models.NHITS}
+  modalities: [timeseries]
+  tasks: [forecasting]
+  requires: [neuralforecast]
+  default_params: {max_steps: 500, scaler_type: robust}
+
+patchtst:
+  name: PatchTST
+  family: neural_ts
+  class_path: {regression: neuralforecast.models.PatchTST}
+  modalities: [timeseries]
+  tasks: [forecasting]
+  requires: [neuralforecast]
+  default_params: {max_steps: 500, scaler_type: robust}
+
+tft:
+  name: TFT
+  family: neural_ts
+  class_path: {regression: neuralforecast.models.TFT}
+  modalities: [timeseries]
+  tasks: [forecasting]
+  requires: [neuralforecast]
+  default_params: {max_steps: 500, scaler_type: robust}
+
+nbeatsx:
+  name: NBEATSx
+  family: neural_ts
+  class_path: {regression: neuralforecast.models.NBEATSx}
+  modalities: [timeseries]
+  tasks: [forecasting]
+  requires: [neuralforecast]
+  default_params: {max_steps: 500, scaler_type: robust}
+
+itransformer:
+  name: iTransformer
+  family: neural_ts
+  class_path: {regression: neuralforecast.models.iTransformer}
+  modalities: [timeseries]
+  tasks: [forecasting]
+  requires: [neuralforecast]
+  default_params: {max_steps: 500, scaler_type: robust, n_series: 1}  # n_series koşum-zamanı override
+
+tsmixer:
+  name: TSMixer
+  family: neural_ts
+  class_path: {regression: neuralforecast.models.TSMixer}
+  modalities: [timeseries]
+  tasks: [forecasting]
+  requires: [neuralforecast]
+  default_params: {max_steps: 500, scaler_type: robust, n_series: 1}
+
+# --- mimari arama (neural_search=True) — kütüphane HPO ---
+auto_nhits:
+  name: AutoNHITS
+  family: neural_ts
+  class_path: {regression: neuralforecast.auto.AutoNHITS}
+  modalities: [timeseries]
+  tasks: [forecasting]
+  requires: [neuralforecast]
+  default_params: {}
+
+auto_patchtst:
+  name: AutoPatchTST
+  family: neural_ts
+  class_path: {regression: neuralforecast.auto.AutoPatchTST}
+  modalities: [timeseries]
+  tasks: [forecasting]
+  requires: [neuralforecast]
+  default_params: {}
+
+auto_tft:
+  name: AutoTFT
+  family: neural_ts
+  class_path: {regression: neuralforecast.auto.AutoTFT}
+  modalities: [timeseries]
+  tasks: [forecasting]
+  requires: [neuralforecast]
+  default_params: {}

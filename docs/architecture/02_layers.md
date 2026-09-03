@@ -185,6 +185,11 @@ Her katman: **saf dönüşüm**, girdi contract → çıktı contract. Yan etki 
   pencere + kısa seri filtresi + `SeasonalNaive` fallback) → per-model `ValidationReport` **+
   `classical_ensemble`** (EAT: aynı OOF matrisinde GES — M3/M4 winner deseni). Şampiyon klasik/EAT ise
   `FittedClassicalForecaster` (çok-model + ağırlık, `sf.predict` kolonlarının ağırlıklı ortalaması).
+- `timeseries/neural_ts.py` (ADR 0032, `[neural-ts]`) — `family: neural_ts` (NHITS/PatchTST/TFT/
+  NBEATSx/iTransformer/TSMixer; `neural_search` → `Auto*`). `run_neural_ts_reports` (klasik şablonu,
+  `NeuralForecast.cross_validation`) + `FittedNeuralForecaster` + `refit_neural_ts` +
+  `champion._neural_ts_bundle`. `run_core_pipeline(run_neural_ts=)`. Kapı: GPU şart (auto) +
+  `neural_ts_min_series`. Serving `persistence.bundle` `champion_neural_ts/` sidecar.
   **ADR 0029:** `predict` istenen `ds` aralığını kapsayacak değişken ufuk kullanır
   (`_horizon_for`, `[h, h·24+366]` clamp) — şampiyon `train−holdout`'ta fit edilse bile gerçek
   gelecek serve edilir (yoksa "son değer" fallback'ine düşüyordu).

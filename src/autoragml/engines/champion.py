@@ -311,6 +311,9 @@ def refit_champion(
             candidate, candidates, selection, reports, frame, profile, task, config
         )
 
+    if candidate.family == "neural_ts":
+        return _neural_ts_bundle(candidate, selection, frame, profile, task, config)
+
     report = next((r for r in reports if r.candidate_key == key), None)
     fit = _fit_pipeline(
         candidate, report, work, plan, profile, task, config, tuner,
@@ -341,6 +344,36 @@ def refit_champion(
         metadata=metadata,
         metrics_oof=dict(champ_row.all_metrics_mean) if champ_row else {},
         pipeline=fit.pipeline,
+    )
+
+
+def _neural_ts_bundle(
+    candidate: Candidate,
+    selection: SelectionResult,
+    frame: pd.DataFrame,
+    profile: DataProfile,
+    task: TaskSpec,
+    config: RunConfig,
+) -> ModelBundle:
+    """Nöral-TS (neuralforecast) şampiyonu → `FittedNeuralForecaster` (ADR 0032)."""
+    from autoragml.engines.timeseries.neural_ts import refit_neural_ts
+
+    forecaster = refit_neural_ts(candidate, frame, profile, task, config)
+    champ_row = next((r for r in selection.scoreboard.rows if r.model_key == candidate.key), None)
+    metadata = BundleMetadata(
+        feature_cols=[],
+        feature_set_hash=_feature_hash([candidate.key]),
+        target_col=task.targets[0],
+        model_key=candidate.key,
+        scenario=selection.champion.scenario,
+        best_iteration=None,
+        adaptive_plan_summary={"structure": "neural_forecasting"},
+        params={"family": "neural_ts", "engine": "neuralforecast", "search": config.neural_search},
+    )
+    return ModelBundle(
+        metadata=metadata,
+        metrics_oof=dict(champ_row.all_metrics_mean) if champ_row else {},
+        pipeline=forecaster,
     )
 
 

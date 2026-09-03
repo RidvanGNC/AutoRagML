@@ -10,6 +10,7 @@ from collections.abc import Callable
 
 import pandas as pd
 
+from autoragml.contracts.candidate import Candidate
 from autoragml.contracts.data_profile import DataProfile
 from autoragml.contracts.engine_result import EngineResult
 from autoragml.contracts.enums import EngineStatus
@@ -41,6 +42,7 @@ def run_core_pipeline(
     messages: list[str] | None = None,
     pre_transform: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
     run_classical: bool = False,
+    run_neural_ts: bool = False,
     recursive: bool = False,
     recursive_season: int = 1,
 ) -> EngineResult:
@@ -69,10 +71,17 @@ def run_core_pipeline(
         from autoragml.models.torch_env import configure_torch
 
         configure_torch(config.seed, config.neural_determinism, config.neural_device)
-    reduction_cands = [c for c in candidates if not (run_classical and is_classical(c))]
+    from autoragml.engines.timeseries.neural_ts import is_neural_ts
+
+    def _native_panel(c: Candidate) -> bool:
+        return (run_classical and is_classical(c)) or (run_neural_ts and is_neural_ts(c))
+
+    reduction_cands = [c for c in candidates if not _native_panel(c)]
     classical_cands = [c for c in candidates if run_classical and is_classical(c)]
+    neural_ts_cands = [c for c in candidates if run_neural_ts and is_neural_ts(c)]
     logger.info(
-        "[engine %s] %d reduction + %d klasik aday", engine_key, len(reduction_cands), len(classical_cands)
+        "[engine %s] %d reduction + %d klasik + %d nöral-TS aday",
+        engine_key, len(reduction_cands), len(classical_cands), len(neural_ts_cands),
     )
 
     if recursive:
@@ -91,6 +100,11 @@ def run_core_pipeline(
         )
         reports += cl_reports
         candidates = [*candidates, *cl_extra_cands]
+    if neural_ts_cands:
+        from autoragml.engines.timeseries.neural_ts import run_neural_ts_reports
+
+        nts_reports, _ = run_neural_ts_reports(frame, profile, task, config, neural_ts_cands)
+        reports += nts_reports
     if not reports:
         msg = f"{engine_key}: hiçbir aday doğrulanamadı"
         raise EngineError(msg)

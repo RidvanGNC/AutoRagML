@@ -25,13 +25,19 @@ _FORMAT_VERSION = 1
 _ENV_PACKAGES = ("scikit-learn", "lightgbm", "numpy", "scipy", "pandas")
 _VERSION_SENSITIVE = ("scikit-learn", "lightgbm")
 _load_security_warned = False
-_NEURAL_DIR = "champion_neural"  # ADR 0031: pytorch_tabular model dizini (joblib yanı sıra)
+_NEURAL_DIR = "champion_neural"        # ADR 0031: pytorch_tabular model dizini (joblib yanı sıra)
+_NEURAL_TS_DIR = "champion_neural_ts"  # ADR 0032: neuralforecast model dizini
 
 
 def _neural_estimator(pipeline: Any) -> Any | None:
     """Pipeline'ın (tek-model) `TabularModelEstimator`'ını bul — yoksa None (ADR 0031)."""
     est = getattr(pipeline, "_estimator", None)
     return est if type(est).__name__ == "TabularModelEstimator" else None
+
+
+def _neural_ts_forecaster(pipeline: Any) -> Any | None:
+    """Pipeline `FittedNeuralForecaster` ise onu döndür (ADR 0032) — joblib-picklable değil."""
+    return pipeline if type(pipeline).__name__ == "FittedNeuralForecaster" else None
 
 
 def _env_snapshot() -> dict[str, str]:
@@ -70,14 +76,20 @@ def save_bundle(bundle: ModelBundle, path: str | Path, *, compress: int = 3) -> 
     dest = Path(path)
     dest.parent.mkdir(parents=True, exist_ok=True)
 
-    # ADR 0031: nöral mimari arama şampiyonu — TabularModel joblib-picklable değil.
-    # Estimator'ı sidecar dizine yaz, pickle'da None bırak, yüklemede geri koy.
+    # ADR 0031/0032: torch modelleri joblib-picklable değil → sidecar dizin, pickle'da None,
+    # yüklemede geri koy. (0031: FittedModelPipeline._estimator; 0032: pipeline'ın kendisi.)
     neural_est = _neural_estimator(bundle.pipeline)
-    neural_saved = False
+    nts = _neural_ts_forecaster(bundle.pipeline)
+    kind = ""
+    saved_pipeline: Any = bundle.pipeline
     if neural_est is not None:
         neural_est.save(dest.parent / _NEURAL_DIR)
         bundle.pipeline._estimator = None  # noqa: SLF001
-        neural_saved = True
+        kind = "arch"
+    elif nts is not None:
+        nts.save(str(dest.parent / _NEURAL_TS_DIR))
+        saved_pipeline = None  # tüm pipeline sidecar'dan yüklenir
+        kind = "ts"
 
     payload: dict[str, Any] = {
         "format_version": _FORMAT_VERSION,
@@ -86,8 +98,8 @@ def save_bundle(bundle: ModelBundle, path: str | Path, *, compress: int = 3) -> 
         "metadata": bundle.metadata,
         "metrics_oof": dict(bundle.metrics_oof),
         "metrics_holdout": dict(bundle.metrics_holdout),
-        "pipeline": bundle.pipeline,
-        "neural_sidecar": neural_saved,
+        "pipeline": saved_pipeline,
+        "neural_sidecar": kind or False,
     }
     try:
         joblib.dump(payload, dest, compress=compress)
@@ -95,7 +107,7 @@ def save_bundle(bundle: ModelBundle, path: str | Path, *, compress: int = 3) -> 
         msg = f"bundle serialize edilemedi ({dest}): {exc}"
         raise PersistenceError(msg) from exc
     finally:
-        if neural_saved:
+        if kind == "arch":
             bundle.pipeline._estimator = neural_est  # noqa: SLF001 - bellekteki bundle sağlam kalsın
     return dest
 
@@ -130,14 +142,21 @@ def load_bundle(path: str | Path) -> ModelBundle:
         md = BundleMetadata(**md)
 
     pipeline = payload.get("pipeline")
-    if payload.get("neural_sidecar") and pipeline is not None:  # ADR 0031
+    sidecar = payload.get("neural_sidecar")
+    if sidecar == "arch" and pipeline is not None:  # ADR 0031
         from autoragml.models.neural_arch import TabularModelEstimator
 
         neural_dir = src.parent / _NEURAL_DIR
         if not neural_dir.is_dir():
-            msg = f"nöral sidecar dizini yok: {neural_dir}"
-            raise PersistenceError(msg)
+            raise PersistenceError(f"nöral sidecar dizini yok: {neural_dir}")
         pipeline._estimator = TabularModelEstimator().load(neural_dir)  # noqa: SLF001
+    elif sidecar == "ts" or (sidecar and pipeline is None):  # ADR 0032
+        from autoragml.engines.timeseries.neural_ts import FittedNeuralForecaster
+
+        ts_dir = src.parent / _NEURAL_TS_DIR
+        if not ts_dir.is_dir():
+            raise PersistenceError(f"nöral-TS sidecar dizini yok: {ts_dir}")
+        pipeline = FittedNeuralForecaster.__new__(FittedNeuralForecaster).load(str(ts_dir))
 
     return ModelBundle(
         metadata=md,

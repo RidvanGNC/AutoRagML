@@ -117,6 +117,7 @@ class TimeSeriesCoreEngine:
             self.key, augmented, profile, task, config,
             tuner=tuner, messages=messages, pre_transform=pre_transform,
             run_classical=config.classical_forecasting,
+            run_neural_ts=config.neural_enabled != "off",  # ADR 0032 — kapı neural_gate/reports'ta
         )
 
     def _run_recursive(

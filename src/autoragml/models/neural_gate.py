@@ -19,6 +19,8 @@ logger = get_logger(__name__)
 
 _PYTABKIT = "pytabkit"
 _ARCH_KEY = "neural_arch_search"
+_NEURAL_TS = "neural_ts"
+_AUTO_TS_KEYS = {"auto_nhits", "auto_patchtst", "auto_tft"}
 
 
 def prepare_neural_candidates(
@@ -28,10 +30,16 @@ def prepare_neural_candidates(
     # ADR 0031: mimari arama adayı yalnız neural_search=True iken havuzda
     if not config.neural_search:
         candidates = [c for c in candidates if c.key != _ARCH_KEY]
+    # ADR 0032: Auto* nöral-TS yalnız neural_search=True; sabit modeller neural_search=False iken
+    if config.neural_search:
+        candidates = [c for c in candidates if c.family != _NEURAL_TS or c.key in _AUTO_TS_KEYS]
+    else:
+        candidates = [c for c in candidates if c.family != _NEURAL_TS or c.key not in _AUTO_TS_KEYS]
 
     torch_neural = [c for c in candidates if _PYTABKIT in c.requires]
     arch = [c for c in candidates if c.key == _ARCH_KEY]
-    if not torch_neural and not arch:
+    neural_ts = [c for c in candidates if c.family == _NEURAL_TS]
+    if not torch_neural and not arch and not neural_ts:
         return candidates
 
     gpu = has_cuda()
@@ -47,13 +55,22 @@ def prepare_neural_candidates(
         hi = hi * 4
     row_ok = n_rows >= lo and (hi is None or n_rows <= hi)
 
-    dropped = {c.key for c in [*torch_neural, *arch]}
+    dropped = {c.key for c in [*torch_neural, *arch, *neural_ts]}
     if not (active and row_ok):
         reason = (
             "GPU yok / neural_enabled!=on" if not active else f"n_rows={n_rows} bant [{lo}, {hi}] dışı"
         )
         logger.info("[neural] adaylar atlandı (%s): %s", reason, sorted(dropped))
         return [c for c in candidates if c.key not in dropped]
+
+    # ADR 0032: nöral-TS için ek kapı — yeterli seri sayısı
+    if neural_ts and profile.timeseries is not None:
+        n_series = len(profile.timeseries.per_series)
+        if 0 < n_series < config.neural_ts_min_series:
+            nts_keys = {c.key for c in neural_ts}
+            logger.info("[neural_ts] %d seri < %d — atlandı", n_series, config.neural_ts_min_series)
+            candidates = [c for c in candidates if c.key not in nts_keys]
+            neural_ts = []
 
     has_pytabkit = bool(torch_neural)
     logger.info(
