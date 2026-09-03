@@ -23,6 +23,7 @@ _SUBSAMPLE_CAP = 60_000
 _TS_DATA_DIR = Path(__file__).parent / "_data"
 _M3_MAX_SERIES = 400   # M3 1428 seri → temsili alt-küme (klasik CV maliyeti)
 _M5_MAX_SERIES = 400   # M5 30k seri → seed'li alt-küme (günlük × ~1900 gün, reduction maliyeti)
+_M4_MAX_SERIES = 350   # M4 Quarterly/Hourly büyük gruplar → seed'li alt-küme
 
 
 @dataclass(frozen=True)
@@ -116,6 +117,55 @@ def _covtype() -> tuple[pd.DataFrame, str]:
     return _subsample(fetch_covtype(as_frame=True).frame.copy()).reset_index(drop=True), "Cover_Type"
 
 
+# --- 3. dalga: tablo genişletme (AMLB / OpenML — akademik tarama, ADR 0040) ---
+
+
+def _openml_ds(data_id: int, target: str | None = None) -> tuple[pd.DataFrame, str]:
+    df = _fetch_openml(data_id=data_id)
+    tgt = target or df.columns[-1]
+    return _subsample(df), tgt
+
+
+def _wine_quality() -> tuple[pd.DataFrame, str]:
+    return _openml_ds(287, "quality")           # 6497×12, karışık, ordinal hedef
+
+
+def _ailerons() -> tuple[pd.DataFrame, str]:
+    return _openml_ds(296, "goal")              # 13750×41, çok-öznitelikli sayısal regresyon
+
+
+def _house_16h() -> tuple[pd.DataFrame, str]:
+    return _openml_ds(574, "price")             # 22784×17, sayısal regresyon
+
+
+def _diamonds() -> tuple[pd.DataFrame, str]:
+    return _openml_ds(42225, "price")           # 53940×10, karışık (ordinal kategorik) regresyon
+
+
+def _phoneme() -> tuple[pd.DataFrame, str]:
+    return _openml_ds(1489, "Class")            # 5404×6, sayısal ikili
+
+
+def _kc1() -> tuple[pd.DataFrame, str]:
+    return _openml_ds(1067, "defects")          # 2109×22, dengesiz yazılım-hata ikili
+
+
+def _amazon_access() -> tuple[pd.DataFrame, str]:
+    return _openml_ds(4135, "target")           # 32769×10, TAMAMEN yüksek-kardinalite kategorik
+
+
+def _mfeat_factors() -> tuple[pd.DataFrame, str]:
+    return _openml_ds(12, "class")              # 2000×217, 10-sınıf (öznitelik yoğun)
+
+
+def _segment() -> tuple[pd.DataFrame, str]:
+    return _openml_ds(36, "class")              # 2310×20, 7-sınıf görüntü segment
+
+
+def _vehicle() -> tuple[pd.DataFrame, str]:
+    return _openml_ds(54, "Class")              # 846×19, 4-sınıf küçük
+
+
 # --- 2. dalga: zaman serisi panel ---------------------------------
 
 
@@ -143,6 +193,40 @@ def _m5_subset() -> tuple[pd.DataFrame, str]:
     rng = np.random.default_rng(42)
     keep = set(rng.choice(ids, size=min(_M5_MAX_SERIES, len(ids)), replace=False))
     return _nixtla_long(y_df[y_df["unique_id"].isin(keep)]), "y"
+
+
+# --- 3. dalga: forecasting frekans genişletme (M4 / LongHorizon — GIFT-Eval ilhamı) ---
+
+
+def _m4_group(group: str, *, cap: int | None = None) -> tuple[pd.DataFrame, str]:
+    from datasetsforecast.m4 import M4
+
+    y_df, *_ = M4.load(directory=str(_TS_DATA_DIR), group=group)
+    if cap is not None:
+        ids = np.sort(y_df["unique_id"].unique())
+        keep = set(np.random.default_rng(42).choice(ids, size=min(cap, len(ids)), replace=False))
+        y_df = y_df[y_df["unique_id"].isin(keep)]
+    return _nixtla_long(y_df), "y"
+
+
+def _m4_weekly() -> tuple[pd.DataFrame, str]:
+    return _m4_group("Weekly")                  # 359 seri, haftalık — yeni frekans
+
+
+def _m4_hourly() -> tuple[pd.DataFrame, str]:
+    return _m4_group("Hourly", cap=_M4_MAX_SERIES)  # ~414 seri, saatlik, s=24 — güçlü mevsim
+
+
+def _m4_quarterly() -> tuple[pd.DataFrame, str]:
+    return _m4_group("Quarterly", cap=_M4_MAX_SERIES)  # 24k seri → alt-küme, çeyreklik
+
+
+def _ett_h1() -> tuple[pd.DataFrame, str]:
+    """ETTh1 — elektrik trafo (enerji alanı), saatlik, 7 uzun değişken-seri (GIFT-Eval Energy)."""
+    from datasetsforecast.long_horizon import LongHorizon
+
+    y_df, *_ = LongHorizon.load(directory=str(_TS_DATA_DIR), group="ETTh1")
+    return _nixtla_long(y_df), "y"
 
 
 # --- kayıt ----------------------------------------------------------
@@ -190,6 +274,44 @@ DATASETS: list[BenchmarkDataset] = [
         tags=["forecasting", "panel", "daily", "intermittent"],
         time_col="ds", group_col="unique_id", horizon=28, season_length=7, primary_metric="wmape",
     ),
+    # --- 3. dalga: tablo genişletme (AMLB/OpenML — ADR 0040) ---
+    BenchmarkDataset(name="wine_quality", loader=_wine_quality, task_hint="regression", naive="mean",
+        notes="Şarap kalitesi — karışık, ordinal hedef (6497×12).", tags=["regression", "mixed"]),
+    BenchmarkDataset(name="ailerons", loader=_ailerons, task_hint="regression", naive="mean",
+        notes="Uçak kontrol — çok-öznitelikli sayısal regresyon (13750×41).", tags=["regression", "highdim"]),
+    BenchmarkDataset(name="house_16h", loader=_house_16h, task_hint="regression", naive="mean",
+        notes="Konut fiyat — sayısal regresyon (22784×17).", tags=["regression", "clean"]),
+    BenchmarkDataset(name="diamonds", loader=_diamonds, task_hint="regression", naive="mean",
+        notes="Elmas fiyat — karışık, ordinal kategorik (53940×10).", tags=["regression", "mixed", "large"]),
+    BenchmarkDataset(name="phoneme", loader=_phoneme, task_hint="binary_classification", naive="majority",
+        notes="Ses fonemi — sayısal ikili (5404×6).", tags=["binary", "numeric"]),
+    BenchmarkDataset(name="kc1", loader=_kc1, task_hint="binary_classification", naive="majority",
+        notes="Yazılım hatası — dengesiz ikili (2109×22).", tags=["binary", "imbalanced", "small"]),
+    BenchmarkDataset(name="amazon_access", loader=_amazon_access, task_hint="binary_classification",
+        naive="majority", notes="Erişim izni — TAMAMEN yüksek-kardinalite kategorik (32769×10).",
+        tags=["binary", "categorical", "highcardinality"]),
+    BenchmarkDataset(name="mfeat_factors", loader=_mfeat_factors, task_hint="multiclass_classification",
+        naive="majority", notes="El yazısı rakam öznitelikleri — 10-sınıf (2000×217).",
+        tags=["multiclass", "highdim"]),
+    BenchmarkDataset(name="segment", loader=_segment, task_hint="multiclass_classification",
+        naive="majority", notes="Görüntü segment — 7-sınıf (2310×20).", tags=["multiclass"]),
+    BenchmarkDataset(name="vehicle", loader=_vehicle, task_hint="multiclass_classification",
+        naive="majority", notes="Silüet — 4-sınıf küçük (846×19).", tags=["multiclass", "small"]),
+    # --- 3. dalga: forecasting frekans genişletme (M4/LongHorizon — GIFT-Eval ilhamı) ---
+    BenchmarkDataset(name="m4_weekly", loader=_m4_weekly, task_hint="forecasting", naive="seasonal_naive",
+        notes="M4 Weekly — 359 seri, haftalık (yeni frekans).", tags=["forecasting", "panel", "weekly"],
+        time_col="ds", group_col="unique_id", horizon=13, season_length=1, primary_metric="smape"),
+    BenchmarkDataset(name="m4_hourly", loader=_m4_hourly, task_hint="forecasting", naive="seasonal_naive",
+        notes="M4 Hourly — ~350 seri, saatlik, güçlü günlük mevsim.", tags=["forecasting", "panel", "hourly"],
+        time_col="ds", group_col="unique_id", horizon=48, season_length=24, primary_metric="smape"),
+    BenchmarkDataset(name="m4_quarterly", loader=_m4_quarterly, task_hint="forecasting",
+        naive="seasonal_naive", notes="M4 Quarterly — 350 seri alt-küme, çeyreklik.",
+        tags=["forecasting", "panel", "quarterly"],
+        time_col="ds", group_col="unique_id", horizon=8, season_length=4, primary_metric="smape"),
+    BenchmarkDataset(name="ett_h1", loader=_ett_h1, task_hint="forecasting", naive="seasonal_naive",
+        notes="ETTh1 — elektrik trafo (enerji), saatlik, 7 uzun değişken-seri.",
+        tags=["forecasting", "panel", "hourly", "energy"],
+        time_col="ds", group_col="unique_id", horizon=48, season_length=24, primary_metric="wmape"),
 ]
 
 BY_NAME: dict[str, BenchmarkDataset] = {d.name: d for d in DATASETS}
