@@ -24,6 +24,7 @@ from autoragml.exceptions import EngineError
 from autoragml.fine_tuners import resolve_tuner
 from autoragml.logging import get_logger
 from autoragml.models import apply_model_hints, resolve_candidates
+from autoragml.models.foundation_gate import prepare_foundation_candidates
 from autoragml.models.neural_gate import prepare_neural_candidates
 from autoragml.scoring import score_reports
 from autoragml.validators import Tuner, run_validation_suite
@@ -43,6 +44,7 @@ def run_core_pipeline(
     pre_transform: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
     run_classical: bool = False,
     run_neural_ts: bool = False,
+    run_foundation_ts: bool = False,
     recursive: bool = False,
     recursive_season: int = 1,
 ) -> EngineResult:
@@ -67,21 +69,29 @@ def run_core_pipeline(
 
     candidates = apply_model_hints(resolve_candidates(config, task), plan.model_hints)
     candidates = prepare_neural_candidates(candidates, profile, config)  # ADR 0030 kapısı
+    candidates = prepare_foundation_candidates(candidates, profile, task, config)  # ADR 0033 kapısı
     if any(c.family == "neural" and "pytabkit" in c.requires for c in candidates):
         from autoragml.models.torch_env import configure_torch
 
         configure_torch(config.seed, config.neural_determinism, config.neural_device)
+    from autoragml.engines.timeseries.foundation_ts import is_foundation_ts
     from autoragml.engines.timeseries.neural_ts import is_neural_ts
 
     def _native_panel(c: Candidate) -> bool:
-        return (run_classical and is_classical(c)) or (run_neural_ts and is_neural_ts(c))
+        return (
+            (run_classical and is_classical(c))
+            or (run_neural_ts and is_neural_ts(c))
+            or (run_foundation_ts and is_foundation_ts(c))
+        )
 
     reduction_cands = [c for c in candidates if not _native_panel(c)]
     classical_cands = [c for c in candidates if run_classical and is_classical(c)]
     neural_ts_cands = [c for c in candidates if run_neural_ts and is_neural_ts(c)]
+    foundation_ts_cands = [c for c in candidates if run_foundation_ts and is_foundation_ts(c)]
     logger.info(
-        "[engine %s] %d reduction + %d klasik + %d nöral-TS aday",
-        engine_key, len(reduction_cands), len(classical_cands), len(neural_ts_cands),
+        "[engine %s] %d reduction + %d klasik + %d nöral-TS + %d foundation-TS aday",
+        engine_key, len(reduction_cands), len(classical_cands),
+        len(neural_ts_cands), len(foundation_ts_cands),
     )
 
     if recursive:
@@ -105,6 +115,11 @@ def run_core_pipeline(
 
         nts_reports, _ = run_neural_ts_reports(frame, profile, task, config, neural_ts_cands)
         reports += nts_reports
+    if foundation_ts_cands:
+        from autoragml.engines.timeseries.foundation_ts import run_foundation_ts_reports
+
+        fts_reports, _ = run_foundation_ts_reports(frame, profile, task, config, foundation_ts_cands)
+        reports += fts_reports
     if not reports:
         msg = f"{engine_key}: hiçbir aday doğrulanamadı"
         raise EngineError(msg)

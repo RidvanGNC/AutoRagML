@@ -118,6 +118,7 @@ class TimeSeriesCoreEngine:
             tuner=tuner, messages=messages, pre_transform=pre_transform,
             run_classical=config.classical_forecasting,
             run_neural_ts=config.neural_enabled != "off",  # ADR 0032 — kapı neural_gate/reports'ta
+            run_foundation_ts=config.foundation_enabled != "off",  # ADR 0033 — kapı foundation_gate'te
         )
 
     def _run_recursive(
@@ -148,5 +149,6 @@ class TimeSeriesCoreEngine:
             tuner=tuner, messages=messages, pre_transform=None,
             run_classical=config.classical_forecasting,
             run_neural_ts=config.neural_enabled != "off",  # ADR 0032
+            run_foundation_ts=config.foundation_enabled != "off",  # ADR 0033
             recursive=True, recursive_season=season,
         )

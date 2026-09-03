@@ -1,0 +1,34 @@
+description: >
+  Foundation (zero-shot) forecasting modelleri (ADR 0033). `[foundation-ts]` extra:
+  chronos-forecasting (Amazon Chronos). **fit yok** — pretrained, zero-shot. Native panel yolu
+  (engines/timeseries/foundation_ts): rolling-origin pencerelerde `predict_df` → OOF; serving tek
+  `predict_df`. Auth'suz HuggingFace ağırlık indirmesi. `foundation_enabled=auto` iken yalnız GPU.
+  `neural_search` etkisiz (aranacak mimari yok). Model boyutu auto-seçilir (küçük panel → _small).
+
+chronos_bolt:
+  name: Chronos-Bolt (base)
+  family: foundation_ts
+  class_path: __foundation_ts__
+  modalities: [timeseries]
+  tasks: [forecasting]
+  requires: [chronos]                     # pip: chronos-forecasting → import adı `chronos`
+  default_params: {checkpoint: amazon/chronos-bolt-base, size: base}
+
+chronos_bolt_small:
+  name: Chronos-Bolt (small)
+  family: foundation_ts
+  class_path: __foundation_ts__
+  modalities: [timeseries]
+  tasks: [forecasting]
+  requires: [chronos]
+  default_params: {checkpoint: amazon/chronos-bolt-small, size: small}
+
+chronos_2:
+  name: Chronos-2
+  family: foundation_ts
+  class_path: __foundation_ts__
+  modalities: [timeseries]
+  tasks: [forecasting]
+  requires: [chronos]
+  enabled: false                          # opsiyonel — güncel/covariate; bizde covariate yok (ADR 0009)
+  default_params: {checkpoint: amazon/chronos-2, size: base}

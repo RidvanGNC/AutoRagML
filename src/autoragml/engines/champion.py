@@ -295,7 +295,13 @@ def refit_champion(
     tuner = tuner or DefaultTuner()
     work = frame.reset_index(drop=True)
 
-    if recursive_season is not None and key != CLASSICAL_ENSEMBLE_KEY and not is_classical(candidate):
+    _native_ts = {"neural_ts", "foundation_ts"}
+    if (
+        recursive_season is not None
+        and key != CLASSICAL_ENSEMBLE_KEY
+        and not is_classical(candidate)
+        and candidate.family not in _native_ts
+    ):
         return _recursive_bundle(
             candidate, selection, work, plan, profile, task, config, season=recursive_season
         )
@@ -314,11 +320,15 @@ def refit_champion(
     if candidate.family == "neural_ts":
         return _neural_ts_bundle(candidate, selection, frame, profile, task, config)
 
+    if candidate.family == "foundation_ts":
+        return _foundation_ts_bundle(candidate, selection, frame, profile, task, config)
+
     report = next((r for r in reports if r.candidate_key == key), None)
     fit = _fit_pipeline(
         candidate, report, work, plan, profile, task, config, tuner,
         with_postproc=True, pre_transform=pre_transform,
-        want_bag=candidate.family != "neural",  # ADR 0030/0031: nöral tek-model refit (bagging pahalı)
+        # ADR 0030/0031/0033: nöral + foundation tek-model refit (bagging pahalı / in-context)
+        want_bag=candidate.family not in {"neural", "foundation"},
     )
     champ_row = next((r for r in selection.scoreboard.rows if r.model_key == key), None)
     ensemble_meta: dict[str, object] = (
@@ -369,6 +379,39 @@ def _neural_ts_bundle(
         best_iteration=None,
         adaptive_plan_summary={"structure": "neural_forecasting"},
         params={"family": "neural_ts", "engine": "neuralforecast", "search": config.neural_search},
+    )
+    return ModelBundle(
+        metadata=metadata,
+        metrics_oof=dict(champ_row.all_metrics_mean) if champ_row else {},
+        pipeline=forecaster,
+    )
+
+
+def _foundation_ts_bundle(
+    candidate: Candidate,
+    selection: SelectionResult,
+    frame: pd.DataFrame,
+    profile: DataProfile,
+    task: TaskSpec,
+    config: RunConfig,
+) -> ModelBundle:
+    """Foundation-TS (Chronos) şampiyonu → `FittedChronosForecaster` (ADR 0033) — zero-shot, fit yok."""
+    from autoragml.engines.timeseries.foundation_ts import refit_foundation_ts
+
+    forecaster = refit_foundation_ts(candidate, frame, profile, task, config)
+    champ_row = next((r for r in selection.scoreboard.rows if r.model_key == candidate.key), None)
+    metadata = BundleMetadata(
+        feature_cols=[],
+        feature_set_hash=_feature_hash([candidate.key]),
+        target_col=task.targets[0],
+        model_key=candidate.key,
+        scenario=selection.champion.scenario,
+        best_iteration=None,
+        adaptive_plan_summary={"structure": "foundation_forecasting"},
+        params={
+            "family": "foundation_ts", "engine": "chronos",
+            "checkpoint": str(candidate.default_params.get("checkpoint", "")),
+        },
     )
     return ModelBundle(
         metadata=metadata,

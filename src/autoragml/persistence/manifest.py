@@ -33,6 +33,9 @@ _ENV_PACKAGES = (
     "pytabkit",
     "pytorch-tabular",
     "neuralforecast",
+    "tabpfn",
+    "chronos-forecasting",
+    "transformers",
 )
 
 

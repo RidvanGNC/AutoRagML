@@ -48,6 +48,7 @@ def _load_class(class_path: str) -> type[Any]:
 
 
 _NEURAL_ARCH = "__neural_arch__"
+_FOUNDATION_TAB = "__foundation_tab__"
 
 
 def build_estimator(
@@ -63,6 +64,12 @@ def build_estimator(
         merged = {**candidate.default_params, **(params or {})}
         merged["task_kind"] = "regression" if task in _REGRESSION_TASKS else "classification"
         return TabularModelEstimator(**merged)
+    if class_path == _FOUNDATION_TAB:  # ADR 0033: TabPFN in-context sarımı
+        from autoragml.models.foundation_tab import FoundationTabEstimator
+
+        merged = {**candidate.default_params, **(params or {})}
+        merged["task_kind"] = "regression" if task in _REGRESSION_TASKS else "classification"
+        return FoundationTabEstimator(**merged)
     cls = _load_class(class_path)
     merged = {**candidate.default_params, **(params or {})}
     try:

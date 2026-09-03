@@ -1,0 +1,18 @@
+description: >
+  Foundation (in-context) tablo modeli (ADR 0033). `[foundation]` extra: tabpfn + torch.
+  TabPFN = prior-data fitted network — `fit` context'i belleğe alır, `predict` az forward geçiş.
+  sklearn arayüzü (ADR 0030 deseni), yeni engine yok. Havuza yalnız `foundation_enabled` uygun +
+  GPU + satır/öznitelik bandında girer (models/foundation_gate kapısı). HPO yok (PFN).
+  Ağırlık indirmesi `TABPFN_TOKEN` gerektirir (`.env`; RunConfig.foundation_token_env) — token
+  yok ve yerel cache boşsa aday atlanır.
+
+tabpfn:
+  name: TabPFN
+  family: foundation
+  class_path: __foundation_tab__          # models.estimator → FoundationTabEstimator (ADR 0033)
+  modalities: [tabular, timeseries]       # forecasting: reduction lag-frame üstünde
+  tasks: [regression, binary_classification, multiclass_classification]
+  predict_kind: [point, proba]
+  requires: [tabpfn]
+  # n_estimators: TabPFN iç ensemble tekrar sayısı (hız/kalite dengesi). random_state sabit → determinist.
+  default_params: {random_state: 42, n_estimators: 4}

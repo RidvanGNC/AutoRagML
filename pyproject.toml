@@ -40,7 +40,8 @@ neural     = ["pytabkit>=1.7", "torch>=2.2"]   # ADR 0030: RealMLP + TabM (sklea
                                               # RealTabR ek: pip install skorch faiss-cpu
 neural-nas = ["pytorch-tabular>=1.1"]          # ADR 0031: mimari arama (aile taraması + derin arama)
 neural-ts  = ["neuralforecast>=1.7"]           # ADR 0032: NHITS/PatchTST/TFT/NBEATSx/iTransformer/TSMixer
-# neural-nas = ["pytorch-tabular>=1.1"]      # ADR 0031: mimari arama (henüz yazılmadı)
+foundation    = ["tabpfn>=2.5"]                # ADR 0033: TabPFN (in-context). TABPFN_TOKEN gerekir (.env)
+foundation-ts = ["chronos-forecasting>=2.1"]   # ADR 0033: Chronos-Bolt zero-shot forecasting (torch>=2.2,<3)
 
 # LLM sağlayıcıları (v2 RAG/agent katmanı için — çekirdek bunlara bağlı değil)
 llm-openai    = ["openai>=1.30"]
@@ -96,6 +97,7 @@ plugins = ["pydantic.mypy"]
 module = [
     "pyarrow.*", "sklearn.*", "scipy.*", "joblib.*", "mlflow.*", "matplotlib.*",
     "torch.*", "pytabkit.*", "pytorch_tabular.*", "omegaconf.*", "neuralforecast.*",
+    "tabpfn.*", "chronos.*", "transformers.*",
 ]
 ignore_missing_imports = true
 

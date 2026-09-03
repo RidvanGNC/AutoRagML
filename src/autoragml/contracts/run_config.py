@@ -176,6 +176,15 @@ class RunConfig(Contract):
     neural_ts_min_series: int = Field(default=20, ge=2)  # altında nöral-TS atlanır
     neural_ts_min_history_mult: float = Field(default=3.0, gt=0.0)  # seri ≥ mult · season · h
 
+    # --- foundation modeller (ADR 0033) — `[foundation]` / `[foundation-ts]` extra ---
+    foundation_enabled: Literal["auto", "on", "off"] = "auto"  # auto: GPU şart; nöralden ayrı bayrak
+    foundation_device: Literal["auto", "cpu", "cuda"] = "auto"
+    foundation_token_env: str = "TABPFN_TOKEN"  # TabPFN ağırlık indirmesi için (`.env`; ADR 0008)
+    foundation_tab_max_rows: int = Field(default=50_000, ge=1)  # TabPFN auto bandı — üstünde atlanır
+    foundation_tab_max_features: int = Field(default=500, ge=1)  # TabPFN auto bandı — üstünde atlanır
+    foundation_ts_min_series: int = Field(default=1, ge=1)  # Chronos zero-shot: tek seri de olur
+    foundation_ts_min_history_mult: float = Field(default=3.0, gt=0.0)  # seri ≥ mult · season · h
+
     @model_validator(mode="after")
     def _post_checks(self) -> RunConfig:
         if self.task_hint is Task.FORECASTING and self.time_col is None:
