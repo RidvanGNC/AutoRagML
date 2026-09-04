@@ -61,7 +61,8 @@ auto_tbats:
   modalities: [timeseries]
   tasks: [forecasting]
   requires: [statsforecast]
-  default_params: {}   # çoklu mevsim + Box-Cox; per-seri yavaş (ETS'den ~10×)
+  enabled: false        # çoklu mevsim + Box-Cox; per-seri ÇOK yavaş (ETS ~10-50×) — opt-in
+  default_params: {}
 
 dynamic_theta:
   name: DynamicOptimizedTheta

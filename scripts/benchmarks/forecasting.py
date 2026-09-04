@@ -77,7 +77,12 @@ def run_forecasting(
         overrides["primary_metric"] = ds.primary_metric
     if forecast_reduction != "direct":
         overrides["forecast_reduction"] = forecast_reduction
-    model = AutoRagML(hpo_level=hpo, output_dir=out_dir, project_name=ds.name)
+    from scripts.benchmarks.run import BENCH_CATALOG
+
+    model = AutoRagML(
+        hpo_level=hpo, output_dir=out_dir, project_name=ds.name,
+        model_catalog_override=[str(BENCH_CATALOG)],
+    )
     result = model.fit(
         train_df, target=target, time_col=ds.time_col, group_col=ds.group_col, **overrides
     )

@@ -54,18 +54,19 @@ def test_forecasting_uses_reduction_regressors() -> None:
 
 
 def test_adr0040_academic_additions_resolve() -> None:
-    """ADR 0040: klasik forecasting + EBM/KNN/NGBoost eklemeleri (kurulu extra'larla)."""
+    """ADR 0040: klasik forecasting + EBM/KNN eklemeleri (kurulu extra'larla)."""
     import importlib.util as u
 
     fc = {c.key for c in resolve_candidates(_cfg(), _reg_task(Modality.TIMESERIES, Task.FORECASTING))}
-    assert {"auto_ces", "auto_tbats", "dynamic_theta", "imapa", "adida"} <= fc  # statsforecast dep var
+    assert {"auto_ces", "dynamic_theta", "imapa", "adida"} <= fc  # statsforecast dep var
     assert "knn" in fc  # sklearn — reduction yolu
 
     reg = {c.key for c in resolve_candidates(_cfg(), _reg_task())}
     assert "knn" in reg
     assert ("ebm" in reg) == (u.find_spec("interpret") is not None)
-    assert ("ngboost" in reg) == (u.find_spec("ngboost") is not None)
-    assert "svr" not in reg and "svc" not in reg  # enabled: false
+    # opt-in (enabled:false) → varsayılan havuzda YOK
+    assert not {"svr", "svc", "auto_tbats", "ngboost", "tabicl", "tabpfn"} & reg
+    assert "auto_tbats" not in fc
 
 
 def test_no_match_raises() -> None:

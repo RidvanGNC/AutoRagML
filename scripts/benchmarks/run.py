@@ -23,6 +23,8 @@ from scripts.benchmarks.evaluate import Outcome, evaluate
 from scripts.benchmarks.forecasting import run_forecasting
 
 _RUNS_DIR = Path(__file__).parent / "_runs"
+# Benchmark opt-in modelleri açar (auto_tbats/ngboost/tabicl — günlük kullanımda enabled:false).
+BENCH_CATALOG = Path(__file__).parent / "_bench_catalog.yaml"
 
 
 def _encode_target(df: pd.DataFrame, target: str, task_hint: str) -> tuple[pd.DataFrame, bool]:
@@ -72,7 +74,10 @@ def run_one(
         train_df, test_df = _split(df, target, ds.task_hint)
         print(f"    {len(train_df)} train / {len(test_df)} test · hedef={target} · encoded={encoded}")
 
-        model = AutoRagML(hpo_level=hpo, output_dir=str(out_dir), project_name=ds.name)
+        model = AutoRagML(
+            hpo_level=hpo, output_dir=str(out_dir), project_name=ds.name,
+            model_catalog_override=[str(BENCH_CATALOG)],
+        )
         result = model.fit(train_df, target=target, task_hint=ds.task_hint)
 
         y_pred = result.predict(test_df)
