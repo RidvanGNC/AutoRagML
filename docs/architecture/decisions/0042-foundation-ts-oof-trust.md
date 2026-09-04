@@ -74,7 +74,15 @@ foundation_ts ile eşdeğerse klasiği tercih eder. `foundation` (tablo) 2'de ka
 
 - A: her iki datasette `foundation_ts` artık 4 pencerede doğrulanıyor (`h=18` / `h=12`).
 - `reason` string'i guard tetiklendiğinde `[ADR 0042: ...]` ekliyor.
-- m5 / m4_hourly: guard'ın marj matematiği koruyor (m5 7.36 > 5.98, m4h 9.2 ≫ 0.03) — tam profil koşumunda teyit edilecek.
+
+### Tam dev profil tekrar koşumu (12/12) — m5/m4_hourly KORUNDU
+`--profile dev` 12 dataset baştan sona: tablo 8/8 **birebir v1** (ADR 0042 dokunmuyor), m3/tourism
+yukarıdaki gibi tekrarlandı, ve:
+- **m5_subset:** `timesfm_2p5` **+%24.4 SUCCESS** — korundu (marj 7.36 > SE 5.98, guard tetiklenmedi)
+- **m4_hourly:** `chronos_bolt` **+%44.4 SUCCESS** — korundu (marj 9.2 ≫ SE 0.03)
+
+Sonuç: **11/12 SUCCESS** (m3 hariç — genuinely çözümsüz). Guard hem gerilemeyi düzeltti hem genuine
+foundation kazançlarını korudu, tabloya sıfır etki.
 
 ## Kapsam dışı
 
