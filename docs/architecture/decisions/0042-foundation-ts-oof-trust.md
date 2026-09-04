@@ -64,7 +64,17 @@ foundation_ts ile eşdeğerse klasiği tercih eder. `foundation` (tablo) 2'de ka
 - `test_adr0042_thin_evidence_foundation_ts_kept_when_margin_clears_se` (marj ≫ SE → korunur)
 - `test_adr0042_no_reliable_rival_keeps_raw_best` (tüm adaylar ince-kanıt → ham en iyi)
 - `tests/unit/scoring/` 27 test + `tests/unit/models/test_foundation.py` yeşil. ruff + mypy(145) yeşil.
-- Dev benchmark tekrar koşumu (tourism ölçümü) — ADR sonrası.
+
+### Dev benchmark doğrulama koşumu (20260904T113242Z, `--profile dev --only m3_monthly tourism_large`)
+
+| dataset | önce (0042 yok) | sonra (0042) | not |
+|---|---|---|---|
+| m3_monthly | timesfm_2p5 · holdout 16.62 · **-14.7%** | timesfm_2p5 · holdout 16.62 · **-14.7%** | değişmedi — 4-pencere OOF 7.34 hâlâ güvenilir rakibi belirgin geçiyor (marj guard tetiklenmiyor); m3 seasonal-naive genuinely near-SOTA |
+| tourism_large | timesfm_2p5 · OOF 18.21 → holdout **27.06** · **-18.3%** ❌ | **dynamic_theta** · OOF 20.13 → holdout **19.89** · **+19.5%** ✅ | guard timesfm'i düşürdü (`joint_ensemble` belirgin marjla geçilmedi) → 1-SE `dynamic_theta`; OOF↔holdout %1 (klasik model); v4 auto_ets +%15.9'u da geçti |
+
+- A: her iki datasette `foundation_ts` artık 4 pencerede doğrulanıyor (`h=18` / `h=12`).
+- `reason` string'i guard tetiklendiğinde `[ADR 0042: ...]` ekliyor.
+- m5 / m4_hourly: guard'ın marj matematiği koruyor (m5 7.36 > 5.98, m4h 9.2 ≫ 0.03) — tam profil koşumunda teyit edilecek.
 
 ## Kapsam dışı
 
