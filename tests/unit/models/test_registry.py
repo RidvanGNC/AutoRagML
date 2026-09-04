@@ -53,20 +53,28 @@ def test_forecasting_uses_reduction_regressors() -> None:
     assert "random_forest" in keys
 
 
+@pytest.mark.full_catalog
 def test_adr0040_academic_additions_resolve() -> None:
-    """ADR 0040: klasik forecasting + EBM/KNN eklemeleri (kurulu extra'larla)."""
+    """ADR 0040: klasik forecasting + EBM/KNN/NGBoost/TabICL eklemeleri (tam katalog)."""
     import importlib.util as u
 
     fc = {c.key for c in resolve_candidates(_cfg(), _reg_task(Modality.TIMESERIES, Task.FORECASTING))}
     assert {"auto_ces", "dynamic_theta", "imapa", "adida"} <= fc  # statsforecast dep var
-    assert "knn" in fc  # sklearn — reduction yolu
+    assert "knn" in fc
 
     reg = {c.key for c in resolve_candidates(_cfg(), _reg_task())}
     assert "knn" in reg
     assert ("ebm" in reg) == (u.find_spec("interpret") is not None)
-    # opt-in (enabled:false) → varsayılan havuzda YOK
-    assert not {"svr", "svc", "auto_tbats", "ngboost", "tabicl", "tabpfn"} & reg
-    assert "auto_tbats" not in fc
+    assert ("ngboost" in reg) == (u.find_spec("ngboost") is not None)
+    # opt-in (katalog `enabled: false`) → tam katalogda bile YOK
+    assert not {"svr", "svc", "auto_tbats", "tabpfn"} & reg
+
+
+def test_academic_additions_lean_catalog_default() -> None:
+    """conftest `_lean_catalog`: ağır modeller varsayılan test havuzundan düşer."""
+    reg = {c.key for c in resolve_candidates(_cfg(), _reg_task())}
+    assert not {"ebm", "ngboost", "svr", "svc", "tabicl"} & reg
+    assert "knn" in reg  # knn hızlı → lean'de de var
 
 
 def test_no_match_raises() -> None:

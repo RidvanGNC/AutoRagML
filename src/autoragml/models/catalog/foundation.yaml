@@ -27,7 +27,4 @@ tabicl:
   tasks: [regression, forecasting, binary_classification, multiclass_classification]
   predict_kind: [point, proba]
   requires: [tabicl]                      # auth'suz — TabPFN'e açık alternatif (ADR 0040)
-  # HF ağırlık indirmesi (auth'suz ama ağ) + foundation family → varsayılan KAPALI (test/hızlı
-  # koşum ağa bağlanmasın). Açmak: model_catalog_override `tabicl: {enabled: true}` + [foundation-tabicl].
-  enabled: false
   default_params: {backend: tabicl, random_state: 42}

@@ -1,12 +1,6 @@
 # Benchmark koşumları için opt-in modelleri aç (ADR 0040/0041).
-# `enabled: false` katalog girişleri: yavaş / ağ-bağımlı → günlük kullanımda kapalı, benchmark'ta açık.
-# `run.py` / `forecasting.py` bunu `model_catalog_override` ile geçer.
+# Katalogta `enabled: false` olan ağır girişler burada açılır; `run.py` / `forecasting.py`
+# bunu `model_catalog_override` ile geçer. (ngboost/tabicl artık üretimde de açık — ADR 0040.)
 
 auto_tbats:
-  enabled: true
-
-ngboost:
-  enabled: true
-
-tabicl:
   enabled: true
