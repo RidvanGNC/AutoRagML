@@ -42,6 +42,30 @@ class RunResult(Contract):
             raise RuntimeError(msg)
         return pipeline.predict(features)
 
+    def predict_interval(self, features: Any, *, coverage: float | None = None) -> Any:
+        """Nokta tahmin ± split-conformal aralık → `(lower, upper)` (ADR 0044).
+
+        `postprocess.conformal.enabled=True` gerekir. v1 kapsamı: yalnız `FittedModelPipeline`/
+        `FittedEnsemblePipeline` şampiyonları (tablo + reduction-forecasting + bagged/GES) —
+        native forecaster/stack/segmented şampiyonlarda `NotImplementedError` (ADR 0044-B takip).
+        """
+        pipeline = self.champion.pipeline
+        if pipeline is None:
+            msg = (
+                "Şampiyon pipeline bellekte değil. Diskteki bundle'ı "
+                "persistence.load_bundle ile yükleyin."
+            )
+            raise RuntimeError(msg)
+        predict_interval_fn = getattr(pipeline, "predict_interval", None)
+        if predict_interval_fn is None:
+            msg = (
+                f"predict_interval: şampiyon türü ({type(pipeline).__name__}) v1'de desteklenmiyor "
+                "— yalnız tablo/reduction-forecasting (FittedModelPipeline/FittedEnsemblePipeline). "
+                "ADR 0044-B takip: native forecaster/stack/segmented."
+            )
+            raise NotImplementedError(msg)
+        return predict_interval_fn(features, coverage=coverage)
+
     def explain(
         self,
         data: Any = None,

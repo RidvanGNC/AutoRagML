@@ -92,6 +92,23 @@ def test_timeseries_engine_reduction_only() -> None:
     assert not np.isnan(pred).any()
 
 
+def test_timeseries_reduction_predict_interval_per_group() -> None:
+    """ADR 0044: reduction-forecasting şampiyonu (FittedModelPipeline/Ensemble) + per_group conformal."""
+    df = _panel_df()
+    ds, cfg, profile, task = _prep(
+        df, time_col="ds", group_col="g", classical_forecasting=False,
+        postprocess={"conformal": {"enabled": True, "coverage": 0.9, "per_group": True}},
+    )
+    result = InProcessRunner().run(TimeSeriesCoreEngine(), ds, cfg, profile, task)
+    pipeline = result.champion.pipeline
+    assert hasattr(pipeline, "predict_interval")
+    point = pipeline.predict(df)
+    lower, upper = pipeline.predict_interval(df)
+    assert lower.shape == upper.shape == point.shape
+    assert np.all(upper >= lower)
+    assert np.all((point >= lower - 1e-6) & (point <= upper + 1e-6))
+
+
 def _monthly_panel() -> pd.DataFrame:
     """Küçük aylık panel — klasik CV hızlı (season 12, ~60 nokta)."""
     months = pd.date_range("2019-01-01", periods=60, freq="MS")

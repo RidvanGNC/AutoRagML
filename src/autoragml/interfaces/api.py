@@ -26,6 +26,20 @@ class LoadedChampion:
             raise RuntimeError(msg)
         return self.bundle.pipeline.predict(features)
 
+    def predict_interval(self, features: Any, *, coverage: float | None = None) -> Any:
+        """Nokta tahmin ± split-conformal aralık (ADR 0044) — bkz. `RunResult.predict_interval`."""
+        if self.bundle.pipeline is None:  # pragma: no cover - load_bundle her zaman doldurur
+            msg = "Yüklenen bundle'da fitted pipeline yok"
+            raise RuntimeError(msg)
+        predict_interval_fn = getattr(self.bundle.pipeline, "predict_interval", None)
+        if predict_interval_fn is None:
+            msg = (
+                f"predict_interval: şampiyon türü ({type(self.bundle.pipeline).__name__}) "
+                "v1'de desteklenmiyor (ADR 0044-B takip)."
+            )
+            raise NotImplementedError(msg)
+        return predict_interval_fn(features, coverage=coverage)
+
     def explain(
         self,
         data: Any,
@@ -128,6 +142,10 @@ class AutoRagML:
 
     def predict(self, features: Any) -> Any:
         return self._require().predict(features)
+
+    def predict_interval(self, features: Any, *, coverage: float | None = None) -> Any:
+        """Nokta tahmin ± split-conformal aralık (ADR 0044) — bkz. `RunResult.predict_interval`."""
+        return self._require().predict_interval(features, coverage=coverage)
 
     def explain(
         self, data: Any = None, *, method: str = "auto",

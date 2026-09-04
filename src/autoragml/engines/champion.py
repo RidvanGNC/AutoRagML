@@ -150,6 +150,7 @@ def _fit_one(
         target_ref_col=sdiff_ref_col(target) if choice == "seasonal_difference" else None,
         pre_transform=pre_transform,
         postprocessor=postprocessor,
+        group_col=task.group_col,  # ADR 0044: predict_interval per_group için
     )
     return pipeline, best_iter
 
@@ -188,13 +189,14 @@ def _maybe_postproc(
     task: TaskSpec,
     y_true: object,
     y_pred: object,
+    group: object = None,
 ) -> tuple[FittedPostprocessor | None, dict[str, object]]:
     if not with_postproc:
         return None, {}
     postproc = build_postprocessor(config.postprocess, profile, task)
     if not postproc.is_active:
         return None, {}
-    fitted = postproc.fit(y_true, y_pred)  # type: ignore[arg-type]
+    fitted = postproc.fit(y_true, y_pred, group=group)  # type: ignore[arg-type]
     return (fitted, fitted.summary) if not fitted.is_noop else (None, {})
 
 
@@ -231,6 +233,7 @@ def _fit_pipeline(
         best_iters: list[int] = []
         oof_true: list[np.ndarray] = []
         oof_pred: list[np.ndarray] = []
+        oof_group: list[np.ndarray] = []
         for fold in folds:
             tr = work.iloc[fold.train_idx].reset_index(drop=True)
             va = work.iloc[fold.test_idx].reset_index(drop=True)
@@ -240,9 +243,13 @@ def _fit_pipeline(
                 best_iters.append(bi)
             oof_pred.append(np.asarray(member.predict(va), dtype=np.float64))
             oof_true.append(pd.to_numeric(va[target], errors="coerce").to_numpy(dtype=np.float64))
+            if task.group_col and task.group_col in va.columns:  # ADR 0044: per_group conformal
+                oof_group.append(va[task.group_col].to_numpy(dtype=object))
 
+        bag_group = np.concatenate(oof_group) if len(oof_group) == len(folds) and oof_group else None
         fitted_post, summary = _maybe_postproc(
-            with_postproc, config, profile, task, np.concatenate(oof_true), np.concatenate(oof_pred)
+            with_postproc, config, profile, task,
+            np.concatenate(oof_true), np.concatenate(oof_pred), group=bag_group,
         )
         bag_classes = (
             members[0].classes
@@ -255,6 +262,7 @@ def _fit_pipeline(
             pre_transform=pre_transform,
             postprocessor=fitted_post,
             classes=bag_classes,  # ADR 0036: sınıflandırma → olasılık ortalaması + argmax
+            group_col=task.group_col,  # ADR 0044: predict_interval per_group için
         )
         return _FitResult(
             pipeline=bag,
@@ -270,7 +278,7 @@ def _fit_pipeline(
     oof = getattr(report, "oof", None)
     fitted_post, summary = _maybe_postproc(
         with_postproc, config, profile, task,
-        getattr(oof, "y_true", None), getattr(oof, "y_pred", None),
+        getattr(oof, "y_true", None), getattr(oof, "y_pred", None), group=getattr(oof, "group", None),
     )
     single, best_iter = _fit_one(
         candidate, choices, params, work, plan, task, config, ctx,
@@ -507,7 +515,8 @@ def _joint_bundle(
     jr = next((r for r in reports if r.candidate_key == JOINT_ENSEMBLE_KEY), None)
     oof = getattr(jr, "oof", None)
     fitted_post, postprocess_summary = _maybe_postproc(
-        True, config, profile, task, getattr(oof, "y_true", None), getattr(oof, "y_pred", None)
+        True, config, profile, task, getattr(oof, "y_true", None), getattr(oof, "y_pred", None),
+        group=getattr(oof, "group", None),
     )
     pipeline = FittedJointForecaster(
         classical=classical, reduction=red_members, postprocessor=fitted_post
@@ -664,7 +673,8 @@ def _stack_bundle(
     stack_report = next((r for r in reports if r.candidate_key == stack_candidate.key), None)
     oof = getattr(stack_report, "oof", None)
     fitted_post, postprocess_summary = _maybe_postproc(
-        True, config, profile, task, getattr(oof, "y_true", None), getattr(oof, "y_pred", None)
+        True, config, profile, task, getattr(oof, "y_true", None), getattr(oof, "y_pred", None),
+        group=getattr(oof, "group", None),
     )
 
     pipeline = FittedStackPipeline(
@@ -735,7 +745,8 @@ def _refit_ensemble(
     ens_report = next((r for r in reports if r.candidate_key == ENSEMBLE_KEY), None)
     oof = getattr(ens_report, "oof", None)
     fitted_post, postprocess_summary = _maybe_postproc(
-        True, config, profile, task, getattr(oof, "y_true", None), getattr(oof, "y_pred", None)
+        True, config, profile, task, getattr(oof, "y_true", None), getattr(oof, "y_pred", None),
+        group=getattr(oof, "group", None),
     )
 
     ens_classes = (
@@ -746,6 +757,7 @@ def _refit_ensemble(
     pipeline = FittedEnsemblePipeline(
         members=fitted, weights=weights, pre_transform=pre_transform,
         postprocessor=fitted_post, classes=ens_classes,  # ADR 0036
+        group_col=task.group_col,  # ADR 0044: predict_interval per_group için
     )
     feature_cols = pipeline.feature_cols
     champ_row = next((r for r in selection.scoreboard.rows if r.model_key == ENSEMBLE_KEY), None)

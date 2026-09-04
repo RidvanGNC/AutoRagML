@@ -25,7 +25,7 @@ class FittedEnsemblePipeline:
     Üyeler `FittedModelPipeline` (GES) veya iç içe `FittedEnsemblePipeline` (bagged üye — ADR 0022).
     """
 
-    __slots__ = ("_classes", "_members", "_postprocessor", "_pre_transform", "_weights")
+    __slots__ = ("_classes", "_group_col", "_members", "_postprocessor", "_pre_transform", "_weights")
 
     def __init__(
         self,
@@ -35,6 +35,7 @@ class FittedEnsemblePipeline:
         pre_transform: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
         postprocessor: FittedPostprocessor | None = None,
         classes: object | None = None,
+        group_col: str | None = None,
     ) -> None:
         if len(members) != len(weights) or not members:
             msg = "FittedEnsemblePipeline: üye/ağırlık sayısı tutarsız"
@@ -45,6 +46,7 @@ class FittedEnsemblePipeline:
         self._postprocessor = postprocessor
         # ADR 0036: sınıflandırma modu — üyeler `predict_proba` sunuyor + sınıf sırası verildi
         self._classes = np.asarray(classes) if classes is not None else None
+        self._group_col = group_col  # ADR 0044: predict_interval per_group için
 
     def _blend_proba(self, frame: pd.DataFrame) -> _Arr:
         acc: _Arr | None = None
@@ -54,17 +56,39 @@ class FittedEnsemblePipeline:
         assert acc is not None
         return acc
 
-    def predict(self, frame: pd.DataFrame) -> _Arr:
+    def _blend_point(self, frame: pd.DataFrame) -> tuple[_Arr, npt.NDArray[np.object_] | None]:
+        """Postprocessor'dan ÖNCE ağırlıklı üye ortalaması + (varsa) grup dizisi."""
         if self._pre_transform is not None:
             frame = self._pre_transform(frame)
-        if self._classes is not None:  # sınıflandırma → olasılık blend + argmax
-            blend = self._blend_proba(frame)
-            return np.asarray(self._classes[np.argmax(blend, axis=1)], dtype=np.float64)
         stacked = np.column_stack([np.asarray(m.predict(frame), dtype=np.float64) for m in self._members])
-        blended = stacked @ self._weights
+        blended: _Arr = stacked @ self._weights
+        group = None
+        if self._group_col is not None and self._group_col in frame.columns:
+            group = frame[self._group_col].to_numpy(dtype=object)
+        return blended, group
+
+    def predict(self, frame: pd.DataFrame) -> _Arr:
+        if self._classes is not None:  # sınıflandırma → olasılık blend + argmax
+            blend = self._blend_proba(
+                self._pre_transform(frame) if self._pre_transform is not None else frame
+            )
+            return np.asarray(self._classes[np.argmax(blend, axis=1)], dtype=np.float64)
+        blended, _ = self._blend_point(frame)
         if self._postprocessor is not None:
             blended = self._postprocessor.apply(blended)
         return blended
+
+    def predict_interval(
+        self, frame: pd.DataFrame, *, coverage: float | None = None
+    ) -> tuple[_Arr, _Arr]:
+        """Nokta tahmin ± split-conformal aralık (ADR 0044). Sınıflandırma modunda desteklenmez."""
+        if self._classes is not None:
+            msg = "FittedEnsemblePipeline.predict_interval: sınıflandırmada desteklenmiyor (ADR 0044)"
+            raise NotImplementedError(msg)
+        blended, group = self._blend_point(frame)
+        if self._postprocessor is None:
+            return blended, blended
+        return self._postprocessor.interval(blended, group=group, coverage=coverage)
 
     def predict_proba(self, frame: pd.DataFrame) -> _Arr:
         if self._pre_transform is not None:

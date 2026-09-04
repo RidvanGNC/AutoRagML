@@ -55,7 +55,16 @@ class CalibrateConfig(Contract):
 
 
 class ConformalConfig(Contract):
-    """Split-conformal tahmin aralığı — **v1.1** (sözleşme rezerve)."""
+    """Split-conformal tahmin aralığı (ADR 0044). Kalibrasyon = şampiyon OOF'u (ayrı split yok).
+
+    `predict_interval()` çağrı-zamanında farklı `coverage` isteyebilir (varsayılan burası);
+    genişlik OOF |residual| dizisinden o an hesaplanır — fit-zamanında sabitlenmez.
+    `per_group=True`: grup (ör. seri) başına residual kantili; örneklemi küçük gruplar
+    (`< min_group_oof`, ADR 0044 — sabit 10) global kantile düşer.
+    v1 kapsamı: yalnız `FittedModelPipeline`/`FittedEnsemblePipeline` (tablo + reduction-forecasting
+    + bagged/GES). Native forecaster'lar (klasik/nöral-TS/foundation-TS/joint/stack/segmented) —
+    ADR 0044-B (takip).
+    """
 
     enabled: bool = False
     coverage: float = Field(default=0.9, gt=0.0, lt=1.0)
@@ -74,9 +83,6 @@ class PostprocessConfig(Contract):
 
     @model_validator(mode="after")
     def _v1_guard(self) -> PostprocessConfig:
-        if self.conformal.enabled:
-            msg = "postprocess.conformal.enabled v1'de desteklenmiyor (v1.1 — ADR 0017)"
-            raise ValueError(msg)
         if self.apply_in_validation:
             msg = "postprocess.apply_in_validation v1'de desteklenmiyor (serving-only — ADR 0017)"
             raise ValueError(msg)

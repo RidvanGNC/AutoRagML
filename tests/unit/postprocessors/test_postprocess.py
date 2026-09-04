@@ -46,11 +46,6 @@ _CLS = TaskSpec(task=Task.BINARY_CLASSIFICATION, modality=Modality.TABULAR, targ
 # --- contract v1 guardları ---------------------------------------------------
 
 
-def test_conformal_enabled_rejected_v1() -> None:
-    with pytest.raises(ValueError, match="conformal"):
-        PostprocessConfig(conformal=ConformalConfig(enabled=True))
-
-
 def test_apply_in_validation_rejected_v1() -> None:
     with pytest.raises(ValueError, match="apply_in_validation"):
         PostprocessConfig(apply_in_validation=True)
@@ -195,3 +190,114 @@ def test_business_rule_applied_last_and_immutable() -> None:
     np.testing.assert_allclose(post.apply([-2.0, 8.0]), [0.0, 8.0])
     np.testing.assert_allclose(halved.apply([-2.0, 8.0]), [0.0, 4.0])
     assert halved.summary["business_rule"] is True
+
+
+# --- conformal (ADR 0044) -------------------------------------------------
+
+
+def _oof_pair(n: int = 200, spread: float = 4.0, seed: int = 0) -> tuple[np.ndarray, np.ndarray]:
+    rng = np.random.default_rng(seed)
+    y_true = rng.normal(50.0, 10.0, n)
+    y_pred = y_true + rng.normal(0.0, spread, n)
+    return y_true, y_pred
+
+
+def test_conformal_disabled_returns_point_as_both_bounds() -> None:
+    post = build_postprocessor(PostprocessConfig(), _profile(-100.0), _REG).fit(*_oof_pair())
+    assert not post.has_conformal
+    lower, upper = post.interval([10.0, 20.0])
+    np.testing.assert_allclose(lower, upper)
+
+
+def test_conformal_global_interval_covers_residuals() -> None:
+    y_true, y_pred = _oof_pair(n=500, spread=4.0)
+    cfg = PostprocessConfig(
+        clip=ClipConfig(auto_nonneg=False), conformal=ConformalConfig(enabled=True, coverage=0.9)
+    )
+    post = build_postprocessor(cfg, _profile(-100.0), _REG).fit(y_true, y_pred)
+    assert post.has_conformal
+    lower, upper = post.interval([10.0, 20.0])
+    assert upper[0] > lower[0]
+    # ~normal(0,4) residual → %90 kantili ~6.6; makul aralıkta olmalı
+    half_width = (upper[0] - lower[0]) / 2
+    assert 4.0 < half_width < 10.0
+    # gerçek residual dağılımının kapsanma oranı ~coverage'a yakın olmalı
+    lo_oof, hi_oof = post.interval(y_pred)
+    covered = np.mean((y_true >= lo_oof) & (y_true <= hi_oof))
+    assert covered > 0.80  # finite-sample marj + tek-nokta test toleransı
+
+
+def test_conformal_per_group_uses_group_specific_width() -> None:
+    y_true1, y_pred1 = _oof_pair(n=100, spread=1.0, seed=1)  # dar residual
+    y_true2, y_pred2 = _oof_pair(n=100, spread=10.0, seed=2)  # geniş residual
+    y_true = np.concatenate([y_true1, y_true2])
+    y_pred = np.concatenate([y_pred1, y_pred2])
+    group = np.array(["tight"] * 100 + ["wide"] * 100)
+
+    cfg = PostprocessConfig(
+        clip=ClipConfig(auto_nonneg=False),
+        conformal=ConformalConfig(enabled=True, coverage=0.9, per_group=True),
+    )
+    postproc = build_postprocessor(cfg, _profile(-1000.0), _REG)
+    fitted = postproc.fit(y_true, y_pred, group=group)  # type: ignore[call-arg]
+
+    lower, upper = fitted.interval(
+        np.array([0.0, 0.0]), group=np.array(["tight", "wide"])
+    )
+    tight_width = upper[0] - lower[0]
+    wide_width = upper[1] - lower[1]
+    assert wide_width > tight_width * 2  # farklı grup → belirgin farklı genişlik
+
+
+def test_conformal_small_group_falls_back_to_global() -> None:
+    y_true1, y_pred1 = _oof_pair(n=100, spread=2.0, seed=3)  # dar, yeterli örneklem
+    y_true2, y_pred2 = _oof_pair(n=5, spread=20.0, seed=4)  # geniş AMA min_group_oof(10) altında
+    y_true = np.concatenate([y_true1, y_true2])
+    y_pred = np.concatenate([y_pred1, y_pred2])
+    group = np.array(["big"] * 100 + ["tiny"] * 5)
+
+    cfg = PostprocessConfig(
+        clip=ClipConfig(auto_nonneg=False),
+        conformal=ConformalConfig(enabled=True, coverage=0.9, per_group=True),
+    )
+    fitted = build_postprocessor(cfg, _profile(-1000.0), _REG).fit(y_true, y_pred, group=group)  # type: ignore[call-arg]
+
+    # tiny grup örneklemi (n=5) yetersiz → group_residuals'a girmez → global genişliğe düşer.
+    # group=None her zaman global'i kullanır → tiny ile aynı sonucu vermeli (aynı kod yolu).
+    lo_none, hi_none = fitted.interval(np.array([0.0]))
+    lo_tiny, hi_tiny = fitted.interval(np.array([0.0]), group=np.array(["tiny"]))
+    np.testing.assert_allclose(hi_none - lo_none, hi_tiny - lo_tiny)
+
+    # big grup örneklemi yeterli (n=100) → KENDİ dar kantilini kullanır → tiny'nin global'inden farklı.
+    lo_big, hi_big = fitted.interval(np.array([0.0]), group=np.array(["big"]))
+    assert (hi_big - lo_big) < (hi_tiny - lo_tiny)
+
+
+def test_conformal_coverage_override_at_call_time() -> None:
+    y_true, y_pred = _oof_pair(n=500, spread=4.0)
+    cfg = PostprocessConfig(
+        clip=ClipConfig(auto_nonneg=False), conformal=ConformalConfig(enabled=True, coverage=0.5)
+    )
+    fitted = build_postprocessor(cfg, _profile(-100.0), _REG).fit(y_true, y_pred)
+    lo50, hi50 = fitted.interval([0.0])
+    lo95, hi95 = fitted.interval([0.0], coverage=0.95)  # fit-zamanı coverage'ı geçersiz kılar
+    assert (hi95[0] - lo95[0]) > (hi50[0] - lo50[0])
+
+
+def test_conformal_insufficient_oof_skips_silently() -> None:
+    cfg = PostprocessConfig(
+        clip=ClipConfig(auto_nonneg=False), conformal=ConformalConfig(enabled=True)
+    )
+    post = build_postprocessor(cfg, _profile(-100.0), _REG).fit(np.array([1.0]), np.array([1.0]))
+    assert not post.has_conformal
+    assert post.summary["conformal"]["fitted"] is False
+
+
+def test_conformal_only_enabled_is_not_noop() -> None:
+    """clip/round/calibrate hepsi kapalı ama conformal açık → is_noop=False (ADR 0044)."""
+    cfg = PostprocessConfig(
+        clip=ClipConfig(auto_nonneg=False), conformal=ConformalConfig(enabled=True)
+    )
+    post = build_postprocessor(cfg, _profile(-100.0), _REG).fit(*_oof_pair())
+    assert not post.is_noop
+    assert post.has_conformal

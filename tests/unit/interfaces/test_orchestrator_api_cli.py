@@ -121,6 +121,45 @@ def test_require_before_fit_raises() -> None:
         AutoRagML().leaderboard()
 
 
+def test_autoragml_predict_interval_end_to_end(tmp_path: Path) -> None:
+    """ADR 0044: conformal.enabled → predict_interval() nokta tahmini kapsayan (lo,hi) döner."""
+    model = AutoRagML(
+        hpo_level="none", output_dir=str(tmp_path), project_name="conformal",
+        postprocess={"conformal": {"enabled": True, "coverage": 0.9}},
+    )
+    model.fit(_df(), target="y")
+    point = model.predict(_df(20))
+    lower, upper = model.predict_interval(_df(20))
+    assert lower.shape == upper.shape == point.shape
+    assert np.all(upper >= lower)
+    assert np.all((point >= lower - 1e-9) & (point <= upper + 1e-9))
+
+    # farklı coverage çağrı-zamanında geçersiz kılınabilir (ADR 0044: OOF residual saklanır)
+    lo99, hi99 = model.predict_interval(_df(20), coverage=0.99)
+    assert np.mean(hi99 - lo99) >= np.mean(upper - lower)
+
+
+def test_predict_interval_disabled_by_default_returns_point(tmp_path: Path) -> None:
+    """conformal.enabled=False (varsayılan) → predict_interval sıfır-genişlik (point,point)."""
+    model = AutoRagML(hpo_level="none", output_dir=str(tmp_path), project_name="noconformal")
+    model.fit(_df(), target="y")
+    lower, upper = model.predict_interval(_df(10))
+    np.testing.assert_allclose(lower, upper)
+
+
+def test_predict_interval_not_implemented_for_unsupported_champion(orch_run: _Out) -> None:
+    """ADR 0044-B: predict_interval sunmayan şampiyon türünde NotImplementedError."""
+    class _NoInterval:
+        def predict(self, x: object) -> object:
+            return x
+
+    stub_bundle = orch_run.result.champion.model_copy(update={"pipeline": _NoInterval()})
+    stub_engine = orch_run.result.engine_result.model_copy(update={"champion": stub_bundle})
+    stub_result = orch_run.result.model_copy(update={"engine_result": stub_engine})
+    with pytest.raises(NotImplementedError, match="_NoInterval"):
+        stub_result.predict_interval(_df(5))
+
+
 def test_cli_run_smoke(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     csv = tmp_path / "d.csv"
     _df().to_csv(csv, index=False)

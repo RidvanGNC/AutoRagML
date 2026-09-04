@@ -37,6 +37,7 @@ class FittedModelPipeline:
         "_estimator",
         "_feature_cols",
         "_feature_pipeline",
+        "_group_col",
         "_postprocessor",
         "_pre_transform",
         "_reserved",
@@ -55,6 +56,7 @@ class FittedModelPipeline:
         pre_transform: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
         postprocessor: FittedPostprocessor | None = None,
         target_ref_col: str | None = None,
+        group_col: str | None = None,
     ) -> None:
         self._feature_pipeline = feature_pipeline
         self._estimator = estimator
@@ -64,13 +66,10 @@ class FittedModelPipeline:
         self._pre_transform = pre_transform
         self._postprocessor = postprocessor
         self._target_ref_col = target_ref_col  # seasonal_difference ref kolonu (ADR 0026)
+        self._group_col = group_col  # ADR 0044: predict_interval per_group için
 
-    def predict(self, frame: pd.DataFrame) -> _Arr:
-        """Ham feature frame'inden nokta tahmini.
-
-        Zaman serisi için: `frame` lag'leri hesaplayacak kadar geçmiş içermeli
-        (reduction FE `pre_transform` ile yeniden uygulanır).
-        """
+    def _raw_point(self, frame: pd.DataFrame) -> tuple[_Arr, npt.NDArray[np.object_] | None]:
+        """Postprocessor'dan ÖNCE nokta tahmin + (varsa) grup dizisi — `predict`/`predict_interval` paylaşır."""
         if self._pre_transform is not None:
             frame = self._pre_transform(frame)
         transformed = self._feature_pipeline.apply(frame)
@@ -82,9 +81,34 @@ class FittedModelPipeline:
         if self._target_ref_col is not None and self._target_ref_col in transformed.columns:
             ref = pd.to_numeric(transformed[self._target_ref_col], errors="coerce").to_numpy(dtype=np.float64)
         out = self._target_transform.inverse(raw, ref=ref)
+        group = None
+        if self._group_col is not None and self._group_col in transformed.columns:
+            group = transformed[self._group_col].to_numpy(dtype=object)
+        return out, group
+
+    def predict(self, frame: pd.DataFrame) -> _Arr:
+        """Ham feature frame'inden nokta tahmini.
+
+        Zaman serisi için: `frame` lag'leri hesaplayacak kadar geçmiş içermeli
+        (reduction FE `pre_transform` ile yeniden uygulanır).
+        """
+        out, _ = self._raw_point(frame)
         if self._postprocessor is not None:
             out = self._postprocessor.apply(out)
         return out
+
+    def predict_interval(
+        self, frame: pd.DataFrame, *, coverage: float | None = None
+    ) -> tuple[_Arr, _Arr]:
+        """Nokta tahmin ± split-conformal aralık (ADR 0044).
+
+        Conformal fit edilmemişse (`postprocess.conformal.enabled=False` veya yetersiz OOF)
+        `(point, point)` döner — sıfır-genişlik, sessizce yanlış aralık üretmez.
+        """
+        out, group = self._raw_point(frame)
+        if self._postprocessor is None:
+            return out, out
+        return self._postprocessor.interval(out, group=group, coverage=coverage)
 
     def _design_matrix(self, frame: pd.DataFrame) -> pd.DataFrame:
         if self._pre_transform is not None:
