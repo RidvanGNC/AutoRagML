@@ -32,11 +32,21 @@ _FAMILY_COMPLEXITY: dict[str, int] = {
     "ml": 3,
     "neural": 4,
     "neural_ts": 4,       # ADR 0039
-    "foundation": 2,      # in-context / zero-shot — fit yok, operasyonel basit (ADR 0039)
-    "foundation_ts": 2,   # zero-shot pretrained forecaster (ADR 0039)
+    "foundation": 2,      # in-context / zero-shot tablo — fit yok, operasyonel basit (ADR 0039)
+    "foundation_ts": 4,   # ADR 0042: neural_ts ile eşit — GPU + opak pretrained; 1-SE bandında klasiği tercih et
     "ensemble": 5,  # tek model eşitse tek model kazanır (ADR 0021)
     "stack": 6,  # en karmaşık — L2 stacker eşitse L1/ensemble kazanır (ADR 0034)
 }
+
+# ADR 0042: OOF'u kırılgan aileler + minimum fold eşiği.
+# - foundation_ts (Chronos/TimesFM): ön-eğitim korpusu M3/M4/tourism benchmark'larını içerir →
+#   rolling-origin OOF "ezberden" iyimser (m3: OOF 8 → holdout 17; tourism: OOF 18 → holdout 27).
+# - neural_ts: yalnız 2 pencerede eğitilir → ince kanıt.
+# Bu ailelerden bir aday ancak en iyi "güvenilir" adayı (bu kümede değil + n_folds≥3) `max(SE)`
+# marjıyla belirgin geçerse şampiyon; aksi halde güvenilir rakip seçilir. `foundation` (sentetik-veri
+# ön-eğitimli tablo: TabPFN/TabICL) kontaminasyon riski taşımaz → kümede DEĞİL.
+_THIN_OOF_FAMILIES = frozenset({"foundation_ts", "neural_ts"})
+_RELIABLE_FOLDS = 3
 
 # ADR 0039: 1-SE basitlik ikamesi en fazla bu kadar göreli OOF maliyetine izin verir.
 # m5 smooth: chronos 51.7 → auto_theta 53.6 (%3.6) — basitlik bunu feda etmemeli.
@@ -95,6 +105,32 @@ def _rank_value(row: ScoreRow, lower: bool) -> float:
 _SE_BAND_MULT = 2.0  # ADR 0038: kararsız-CV filtresi — r.se > mult·band ise bantta değil
 
 
+def _untrusted_oof(row: ScoreRow) -> bool:
+    """OOF'u gerçek holdout'u tahmin etmeyebilir: kontamine-ön-eğitimli forecaster ya da ince kanıt."""
+    return row.family in _THIN_OOF_FAMILIES or row.n_folds < _RELIABLE_FOLDS
+
+
+def _reliable_best(pool_sorted: list[ScoreRow], raw_best: ScoreRow) -> ScoreRow:
+    """ADR 0042 — ince-kanıt / kontamine-OOF marj guard'ı.
+
+    OOF-en-iyi aday `_untrusted_oof` ise, en iyi **güvenilir** adayı (`_untrusted_oof` değil)
+    `max(kendi SE, rakip SE)` marjıyla **belirgin** geçerse `raw_best` kalır. Aksi halde o
+    güvenilir rakip `best` olur — 1-SE kuralı oradan devam eder; ince-kanıtlı aday `within`
+    bandına girse de %3 basitlik tavanında elenir.
+
+    Benchmark: tourism timesfm OOF 18.21 vs joint_ensemble 19.64 (marj 1.43 < SE 1.70) → düşürülür
+    (v4 auto_ets +%15.9 davranışına döner). m5 (marj 7.36 > 5.98) ve m4_hourly (9.2 ≫ 0.03) → korunur.
+    """
+    if not _untrusted_oof(raw_best):
+        return raw_best
+    rival = next((r for r in pool_sorted if not _untrusted_oof(r)), None)
+    if rival is None:
+        return raw_best  # kıyaslanacak güvenilir aday yok — ham en iyiyi koru
+    margin = abs(raw_best.oof_metric_mean - rival.oof_metric_mean)
+    need = max(raw_best.oof_metric_se, rival.oof_metric_se)
+    return raw_best if margin > need else rival
+
+
 def _within_one_se(pool: list[ScoreRow], best: ScoreRow, noise_floor: float, lower: bool) -> list[ScoreRow]:
     """1-SE bandı: en iyinin `max(best.SE, noise_floor)` toleransı içindeki **güvenilir** adaylar.
 
@@ -137,7 +173,9 @@ def select_champion(
     fallback_warning = not eligible
 
     pool_sorted = sorted(pool, key=lambda r: _rank_value(r, lower))
-    best = pool_sorted[0]
+    raw_best = pool_sorted[0]
+    best = _reliable_best(pool_sorted, raw_best)  # ADR 0042: ince-kanıt marj guard'ı
+    demoted = best.model_key != raw_best.model_key
     within = _within_one_se(pool_sorted, best, noise_floor, lower)
 
     if config.selection_rule is SelectionRule.ONE_STD_ERR:
@@ -159,6 +197,11 @@ def select_champion(
     else:
         champ = best
         reason = f"En iyi {primary} = {best.oof_metric_mean:.4g}"
+    if demoted:
+        reason += (
+            f" [ADR 0042: OOF-en-iyi `{raw_best.model_key}` yalnız {raw_best.n_folds} pencerede "
+            f"doğrulandı, `{best.model_key}` ({best.n_folds}+ fold) belirgin marjla geçilmedi]"
+        )
     if fallback_warning:
         reason += " [tüm adaylar guardrail'e takıldı — ham sıralamadan seçildi]"
 

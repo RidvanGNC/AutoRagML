@@ -106,6 +106,49 @@ def test_se_band_filter_excludes_unstable_candidate() -> None:
     assert sel.champion.model_key in {"stat_a", "stat_b"}
 
 
+def test_adr0042_thin_evidence_foundation_ts_demoted_when_margin_below_se() -> None:
+    """ADR 0042: 2-pencere foundation_ts OOF-en-iyi ama güvenilir rakibini SE marjıyla geçemiyor
+    → güvenilir aday şampiyon (tourism: timesfm 18.2 ± 1.7 vs joint_ensemble 19.6)."""
+    reports = [
+        make_report("timesfm_2p5", smape=18.2, se=1.7, n_folds=2),
+        make_report("joint_ensemble", smape=19.6, se=1.15, n_folds=3),
+        make_report("auto_ets", smape=20.1, se=1.1, n_folds=3),
+    ]
+    cands = [
+        _cand("timesfm_2p5", "foundation_ts"),
+        _cand("joint_ensemble", "ensemble"),
+        _cand("auto_ets", "statistical"),
+    ]
+    sel = score_reports(reports, cands, _cfg(), _TASK, make_profile())
+    assert sel.champion.model_key == "auto_ets"  # demote → joint_ensemble best → 1-SE en basiti
+    assert "ADR 0042" in sel.champion.reason
+    assert "timesfm_2p5" in sel.champion.within_1se  # yine bantta (bilgi amaçlı)
+
+
+def test_adr0042_thin_evidence_foundation_ts_kept_when_margin_clears_se() -> None:
+    """ADR 0042: foundation_ts güvenilir rakibini SE marjıyla belirgin geçiyor → şampiyon kalır
+    (m5/m4_hourly: marj ≫ SE)."""
+    reports = [
+        make_report("chronos_bolt", smape=8.0, se=0.9, n_folds=2),
+        make_report("classical_ensemble", smape=12.0, se=0.6, n_folds=3),
+    ]
+    cands = [_cand("chronos_bolt", "foundation_ts"), _cand("classical_ensemble", "ensemble")]
+    sel = score_reports(reports, cands, _cfg(), _TASK, make_profile())
+    assert sel.champion.model_key == "chronos_bolt"
+    assert "ADR 0042" not in sel.champion.reason
+
+
+def test_adr0042_no_reliable_rival_keeps_raw_best() -> None:
+    """ADR 0042: kıyaslanacak güvenilir aday (kontamine-değil + n_folds≥3) yoksa ham en iyi korunur."""
+    reports = [
+        make_report("timesfm_2p5", smape=10.0, se=1.0, n_folds=2),
+        make_report("patchtst", smape=11.0, se=1.0, n_folds=2),
+    ]
+    cands = [_cand("timesfm_2p5", "foundation_ts"), _cand("patchtst", "neural_ts")]
+    sel = score_reports(reports, cands, _cfg(), _TASK, make_profile())
+    assert sel.champion.model_key == "timesfm_2p5"
+
+
 def test_best_rule_picks_lowest_metric() -> None:
     reports = [make_report("a", smape=10.0, se=2.0), make_report("b", smape=10.8, se=2.0)]
     cands = [_cand("a", "gbdt"), _cand("b", "linear")]

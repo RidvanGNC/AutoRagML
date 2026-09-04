@@ -40,7 +40,9 @@ logger = get_logger(__name__)
 
 _Arr = npt.NDArray[np.float64]
 FOUNDATION_TS_FAMILY = "foundation_ts"
-_MAX_CV_WINDOWS = 2
+# ADR 0042: 2 pencere → anlamsız SE + iyimser OOF (m3/tourism benchmark: OOF 8, holdout 17).
+# Zero-shot = eğitim yok → ek pencere yalnız 1 forward geçiş; klasik ile aynı (4) pencere.
+_MAX_CV_WINDOWS = 4
 _FOUNDATION_TS_DIR = "champion_foundation_ts"
 _QUANTILES = [0.1, 0.5, 0.9]
 
