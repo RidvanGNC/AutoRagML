@@ -58,6 +58,17 @@ tsmixer:
   requires: [neuralforecast]
   default_params: {max_steps: 500, scaler_type: robust, n_series: 1}
 
+tide:
+  name: TiDE
+  family: neural_ts
+  class_path: {regression: neuralforecast.models.TiDE}
+  modalities: [timeseries]
+  tasks: [forecasting]
+  requires: [neuralforecast]
+  # ADR 0043 — basit MLP encoder/decoder, kovaryant destekli, ADR 0032'de değerlendirilip
+  # ertelenmişti. 2026 araştırması: kesikli panelde büyük mimarilerden daha isabetli + ucuz.
+  default_params: {max_steps: 500, scaler_type: robust}
+
 # --- mimari arama (neural_search=True) — kütüphane HPO ---
 auto_nhits:
   name: AutoNHITS

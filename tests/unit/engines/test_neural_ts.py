@@ -36,8 +36,9 @@ def test_is_neural_ts() -> None:
 
 def test_neural_ts_catalog_yaml_present() -> None:
     cat = load_catalog()
-    assert {"nhits", "patchtst", "tft", "nbeatsx", "itransformer", "tsmixer"} <= set(cat)
+    assert {"nhits", "patchtst", "tft", "nbeatsx", "itransformer", "tsmixer", "tide"} <= set(cat)
     assert {"auto_nhits", "auto_patchtst", "auto_tft"} <= set(cat)
+    assert cat["tide"]["family"] == "neural_ts"  # ADR 0043
 
 
 @pytest.mark.skipif(_HAS_NF, reason="neuralforecast kurulu — 'yok' senaryosu")
