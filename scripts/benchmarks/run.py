@@ -18,7 +18,15 @@ from pathlib import Path
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
 
-from scripts.benchmarks.datasets import BY_NAME, DATASETS, BenchmarkDataset, naive_prediction
+from scripts.benchmarks.datasets import (
+    BY_NAME,
+    DATASETS,
+    DEV_SUBSET,
+    BenchmarkDataset,
+    fast_caps,
+    naive_prediction,
+    set_fast_mode,
+)
 from scripts.benchmarks.evaluate import Outcome, evaluate
 from scripts.benchmarks.forecasting import run_forecasting
 
@@ -62,12 +70,18 @@ def run_one(
     t0 = time.perf_counter()
     if ds.is_timeseries:
         try:
-            return run_forecasting(
+            outcome = run_forecasting(
                 ds, hpo, str(out_dir), forecast_reduction=forecast_reduction
             )
         except Exception as exc:  # noqa: BLE001
             traceback.print_exc()
             return _error_outcome(ds.name, ds.task_hint, exc, time.perf_counter() - t0)
+        print(
+            f"    → {outcome.status.upper()} · şampiyon={outcome.champion} ({outcome.champion_family}) · "
+            f"{outcome.primary_metric}: {outcome.champion_test_score} vs naive {outcome.naive_test_score} "
+            f"({outcome.improvement_pct:+.1f}%) · {outcome.runtime_s}s"
+        )
+        return outcome
     try:
         df, target = ds.loader()
         df, encoded = _encode_target(df, target, ds.task_hint)
@@ -153,6 +167,10 @@ def _write_summary(outcomes: list[Outcome], run_dir: Path) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="benchmarks.run")
     parser.add_argument("--only", action="append", help="Sadece bu dataset(ler)")
+    parser.add_argument(
+        "--profile", default="full", choices=["full", "dev"],
+        help="dev: 12 dataset + sıkı veri capleri (~90-120 dk, geliştirme sinyali); full: 23 dataset",
+    )
     parser.add_argument("--hpo", default="light", choices=["none", "light", "thorough"])
     parser.add_argument(
         "--forecast-reduction", default="direct", choices=["direct", "recursive"],
@@ -170,7 +188,19 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {d.name:22} {d.task_hint:26} {', '.join(d.tags)}")
         return 0
 
-    selected = [BY_NAME[n] for n in args.only] if args.only else DATASETS
+    if args.profile == "dev":
+        set_fast_mode(True)
+        row_cap, series_cap = fast_caps()
+        print(
+            f"[profil] dev — {len(DEV_SUBSET)} dataset · tablo ≤{row_cap} satır · "
+            f"panel ≤{series_cap} seri · tam katalog"
+        )
+    if args.only:
+        selected = [BY_NAME[n] for n in args.only]
+    elif args.profile == "dev":
+        selected = [BY_NAME[n] for n in DEV_SUBSET]
+    else:
+        selected = DATASETS
 
     if args.download:
         return _prefetch(selected)

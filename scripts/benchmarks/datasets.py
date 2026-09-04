@@ -25,6 +25,23 @@ _M3_MAX_SERIES = 400   # M3 1428 seri → temsili alt-küme (klasik CV maliyeti)
 _M5_MAX_SERIES = 400   # M5 30k seri → seed'li alt-küme (günlük × ~1900 gün, reduction maliyeti)
 _M4_MAX_SERIES = 350   # M4 Quarterly/Hourly büyük gruplar → seed'li alt-küme
 
+# --- dev (hızlı) profil: geliştirme sırasında "iyiye mi kötüye mi" sinyali için sıkı capler.
+# Model kataloğu TAM kalır (tabicl/timesfm/neural dahil) — yalnız veri küçülür.
+_FAST_MODE = False
+_FAST_ROW_CAP = 5_000
+_FAST_SERIES_CAP = 120
+
+
+def set_fast_mode(on: bool = True) -> None:
+    """Dev profil: tablo satır capi `_FAST_ROW_CAP`, panel seri capi `_FAST_SERIES_CAP`."""
+    global _FAST_MODE
+    _FAST_MODE = on
+
+
+def fast_caps() -> tuple[int, int]:
+    """(tablo satır capi, panel seri capi) — dev profil raporlaması için."""
+    return _FAST_ROW_CAP, _FAST_SERIES_CAP
+
 
 @dataclass(frozen=True)
 class BenchmarkDataset:
@@ -51,9 +68,10 @@ class BenchmarkDataset:
 
 
 def _subsample(df: pd.DataFrame, *, seed: int = 42) -> pd.DataFrame:
-    if len(df) <= _SUBSAMPLE_CAP:
+    cap = _FAST_ROW_CAP if _FAST_MODE else _SUBSAMPLE_CAP
+    if len(df) <= cap:
         return df
-    return df.sample(n=_SUBSAMPLE_CAP, random_state=seed).reset_index(drop=True)
+    return df.sample(n=cap, random_state=seed).reset_index(drop=True)
 
 
 def _fetch_openml(name: str | None = None, *, data_id: int | None = None) -> pd.DataFrame:
@@ -72,12 +90,22 @@ def _fetch_openml(name: str | None = None, *, data_id: int | None = None) -> pd.
 
 
 def _nixtla_long(y_df: pd.DataFrame) -> pd.DataFrame:
-    """Nixtla `unique_id, ds, y` → AutoRagML long-format (kolon adları korunur)."""
+    """Nixtla `unique_id, ds, y` → AutoRagML long-format (kolon adları korunur).
+
+    Dev profil (`_FAST_MODE`) tüm panel loader'lar için ortak çıkış noktası burada
+    olduğundan seri capi de burada uygulanır (`_FAST_SERIES_CAP`, seed'li).
+    """
     out = y_df[["unique_id", "ds", "y"]].copy()
     out["unique_id"] = out["unique_id"].astype(str)
     out["ds"] = pd.to_datetime(out["ds"])
     out["y"] = pd.to_numeric(out["y"], errors="coerce")
-    return out.dropna(subset=["y"]).sort_values(["unique_id", "ds"]).reset_index(drop=True)
+    out = out.dropna(subset=["y"])
+    if _FAST_MODE:
+        ids = np.sort(out["unique_id"].unique())
+        if len(ids) > _FAST_SERIES_CAP:
+            keep = np.random.default_rng(42).choice(ids, size=_FAST_SERIES_CAP, replace=False)
+            out = out[out["unique_id"].isin(set(keep))]
+    return out.sort_values(["unique_id", "ds"]).reset_index(drop=True)
 
 
 # --- 1. dalga: tablo -------------------------------------------------
@@ -86,7 +114,7 @@ def _nixtla_long(y_df: pd.DataFrame) -> pd.DataFrame:
 def _california() -> tuple[pd.DataFrame, str]:
     from sklearn.datasets import fetch_california_housing
 
-    return fetch_california_housing(as_frame=True).frame.copy(), "MedHouseVal"
+    return _subsample(fetch_california_housing(as_frame=True).frame.copy()), "MedHouseVal"
 
 
 def _bike_sharing() -> tuple[pd.DataFrame, str]:
@@ -315,6 +343,16 @@ DATASETS: list[BenchmarkDataset] = [
 ]
 
 BY_NAME: dict[str, BenchmarkDataset] = {d.name: d for d in DATASETS}
+
+# Dev (hızlı) profil — 12 dataset, tam katalog + sıkı capler (~90-120 dk).
+# Kapsam: regresyon (temiz/karışık/ordinal) · ikili (kategorik/küçük/yüksek-kardinalite) ·
+# çok-sınıf (büyük/küçük) · forecasting (aylık düz / düşük-hacim hiyerarşik / kesikli günlük / saatlik).
+DEV_SUBSET: list[str] = [
+    "california_housing", "bike_sharing", "wine_quality",
+    "adult", "credit_g", "amazon_access",
+    "covtype", "vehicle",
+    "m3_monthly", "tourism_large", "m5_subset", "m4_hourly",
+]
 
 
 def naive_prediction(train_y: pd.Series, n_test: int, kind: str) -> np.ndarray:
