@@ -68,6 +68,41 @@ Ayrıntı: [`docs/architecture/decisions/`](docs/architecture/decisions/) (ADR 0
 | **v1.1 robustluk + akademik tarama** (ADR 0038–0043) | Panel holdout/seçim düzeltmeleri (m3/m5/tourism benchmark bulguları) · EBM/KNN/NGBoost/TimesFM/**TiDE** ekleme · foundation-TS OOF güven guard'ı |
 | **v1.1 kapanış** (ADR 0044–0046) | **Split-conformal `predict_interval()`** · **hiyerarşik reconciliation** (MinTrace) · deneysel per-series şampiyon |
 
+## Yol haritası
+
+### v1.1 — kalan küçük kalemler (bu fazda)
+
+| kalem | not |
+|---|---|
+| Isotonic/linear kalibrasyon | `CalibrateConfig.method` şu an yalnız `off`/`additive_bias`/`multiplicative` |
+| GAM (`pygam`) modeli | Yalnız EBM (glassbox GAM ailesi) var; bağımsız `pygam` tabanlı model yok |
+| ModernNCA | Akademik taramada (ADR 0040) değerlendirildi, implemente edilmedi |
+| String-etiketli sınıflandırma hedefi oto-encode | Çekirdekte yok — yalnız benchmark harness'ı elle kodluyor |
+| `predict_interval()`/`explain()` — native forecaster/stack/segmented şampiyonlar | Şu an yalnız tablo + reduction-forecasting (ADR 0044-B/0045-B) |
+| MinTrace `mint_shrink` (daha optimal reconciliation) | `OOFArrays`'e zaman damgası (`ds`) eklenmesini gerektiriyor |
+| Tam 23-dataset benchmark doğrulaması | v1.1'in genel kapanış ölçümü |
+
+### v1.2 — modalite + veri genişlemesi
+
+- **Gerçek exogenous/kovaryant desteği** (`Dataset.relations` açılması, ADR 0009 rezervi) —
+  fiyat/promosyon/tatil gibi dış değişkenler; TiDE'nin ve hiyerarşik reconciliation'ın kovaryant
+  desteğini gerçekten kullanabilmek için önkoşul.
+- **Metin / görsel / ses modalite** — çekirdek modalite-agnostik tasarım zaten buna göre (ADR 0002).
+- Gerçek çok-tablo (`relations`) desteği, hiyerarşik seviyeler arası tahmin erişimi.
+
+### v2 — RAG/agent üst katmanı + kullanıcı arayüzü
+
+- **LLM/agent orkestrasyonu** — `llm/` sağlayıcı soyutlaması (OpenAI/Anthropic/Bedrock/Azure/local)
+  üzerine RAG/agent katmanı; `interfaces/agent_tools.py` şeması bugünden hazır.
+- **Kullanım arayüzleri — üç seviye:**
+  1. **Shell/CLI** (bugün var) — `autoragml run --data ... --target ...`.
+  2. **Kolay-kullanım katmanı** — kullanıcı yalnızca veri path'i verip **varsayılan akışla**
+     çalıştırabilir; detaylandırmak isterse parametreleri tek tek açabilir (preset → override
+     zinciri zaten bu modeli destekliyor, ADR 0016).
+  3. **UI** — yukarıdaki ikisinin görsel karşılığı; tüm parametreler arayüzden de değiştirilebilir.
+     Tasarım + implementasyon **RAG/LLM fazında (v2)** ele alınacak — bu madde şimdilik yalnız
+     **bilgi/niyet notu**, sonradan çok daha fazla ayrıntı eklenecek.
+
 ## Kurulum
 
 ```bash
