@@ -124,3 +124,61 @@ def test_no_classical_candidates_returns_empty() -> None:
     df = _panel()
     cfg, ds, profile, task = _prep(df)
     assert run_classical_reports(materialize_frame(ds), profile, task, cfg, []) == ([], [], None)
+
+
+# --- ADR 0047: foundation-TS / nöral-TS frekans kapısı ---------------------------
+
+
+def _daily_panel(n_series: int = 4, n_periods: int = 120) -> pd.DataFrame:
+    rng = np.random.default_rng(1)
+    rows = []
+    for g in range(n_series):
+        for i, ds in enumerate(pd.date_range("2020-01-01", periods=n_periods, freq="D")):
+            rows.append({"unique_id": f"s{g}", "ds": ds, "y": 50 + 8 * np.sin(i / 7 * 6.283) + rng.normal(0, 2)})
+    return pd.DataFrame(rows)
+
+
+def _fts_cand():
+    from autoragml.contracts.candidate import Candidate
+    from autoragml.contracts.enums import Modality, Task
+
+    return Candidate(
+        key="chronos_bolt", name="chronos_bolt", family="foundation_ts",
+        class_path="__foundation_ts__", modalities=[Modality.TIMESERIES], tasks=[Task.FORECASTING],
+        default_params={"backend": "chronos"},
+    )
+
+
+def _nts_cand():
+    from autoragml.contracts.candidate import Candidate
+    from autoragml.contracts.enums import Modality, Task
+
+    return Candidate(
+        key="nhits", name="nhits", family="neural_ts",
+        class_path={"regression": "neuralforecast.models.NHITS"},
+        modalities=[Modality.TIMESERIES], tasks=[Task.FORECASTING],
+    )
+
+
+def test_adr0047_is_low_frequency_panel() -> None:
+    from autoragml.engines.timeseries.classical import is_low_frequency_panel
+
+    _, _, monthly_profile, _ = _prep(_panel())  # freq MS
+    _, _, daily_profile, _ = _prep(_daily_panel())  # freq D
+    assert is_low_frequency_panel(monthly_profile) is True
+    assert is_low_frequency_panel(daily_profile) is False
+
+
+def test_adr0047_low_freq_gate_blocks_foundation_and_neural_ts() -> None:
+    """Aylık panel + `*_enabled != 'on'` → foundation-TS/nöral-TS erken dönüş (model yüklenmez).
+
+    'on' bypass yolu ayrıca `test_foundation.py::test_timesfm_reports_and_serving` tarafından
+    kapsanıyor (foundation_enabled='on' + freq='MS' + rapor bekliyor)."""
+    from autoragml.engines.timeseries.foundation_ts import run_foundation_ts_reports
+    from autoragml.engines.timeseries.neural_ts import run_neural_ts_reports
+
+    cfg, ds, profile, task = _prep(_panel())
+    assert cfg.foundation_enabled != "on" and cfg.neural_enabled != "on"
+    frame = materialize_frame(ds)
+    assert run_foundation_ts_reports(frame, profile, task, cfg, [_fts_cand()]) == ([], [])
+    assert run_neural_ts_reports(frame, profile, task, cfg, [_nts_cand()]) == ([], [])

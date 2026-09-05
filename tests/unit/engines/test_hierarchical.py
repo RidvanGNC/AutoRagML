@@ -54,15 +54,16 @@ def test_build_hierarchy_rejects_nonunique_group_col() -> None:
         )
 
 
-def test_reconcile_coherence() -> None:
-    """MinTrace(wls_struct) sonrası çocuklar toplamı = ebeveyn (matematiksel garanti)."""
+@pytest.mark.parametrize("method", ["ols", "wls_struct"])
+def test_reconcile_coherence(method: str) -> None:
+    """MinTrace (ols=varsayılan, ADR 0047; ve wls_struct) sonrası çocuklar toplamı = ebeveyn."""
     hspec = build_hierarchy(
         _panel(), hierarchy_cols=["state", "zone"], group_col="region", time_col="ds", target_col="y",
     )
     rng = np.random.default_rng(1)
     h = 3
     y_hat = rng.normal(50, 10, size=(len(hspec.node_order), h))  # tutarsız ham tahminler
-    reconciled = reconcile(hspec.s_matrix, y_hat)
+    reconciled = reconcile(hspec.s_matrix, y_hat, method=method)
     assert reconciled.shape == y_hat.shape
     bottom_idx = [hspec.node_order.index(b) for b in hspec.bottom_ids]
     state_a_idx = hspec.node_order.index("A")

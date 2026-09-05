@@ -98,6 +98,15 @@ def test_hierarchy_cols_accepted_with_group_col() -> None:
     assert res.config.hierarchy_cols == ["state", "zone"]
 
 
+def test_hierarchy_reconcile_method_default_ols() -> None:
+    """ADR 0047: varsayılan reconciliation yöntemi `ols`."""
+    assert resolve_run_config(target="y").config.hierarchy_reconcile_method == "ols"
+    res = resolve_run_config(target="y", overrides={"hierarchy_reconcile_method": "wls_struct"})
+    assert res.config.hierarchy_reconcile_method == "wls_struct"
+    with pytest.raises(ConfigError, match="doğrulaması başarısız"):
+        resolve_run_config(target="y", overrides={"hierarchy_reconcile_method": "mint_shrink"})
+
+
 def test_config_file_layer(tmp_path: object) -> None:
     cfg = tmp_path / "run.yaml"  # type: ignore[operator]
     cfg.write_text("seed: 7\nproject_name: proj\n", encoding="utf-8")

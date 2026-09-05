@@ -64,12 +64,20 @@ ağaç; crossed/grouped hiyerarşi desteği ayrı bir iş (ADR 0048?). Mevcut `t
 ## Doğrulama
 
 - ruff + mypy(147 dosya) yeşil.
-- `is_low_frequency_panel` smoke: {MS,M,Q,QS,Y,A}→True · {W,D,H,B,None}→False.
-- `tourism_hier` loader smoke: 76 bölge / 27 zone / 7 eyalet, `[state,zone,region,ds,y]`.
-- `reconcile(S, y_hat, method="ols")` smoke: coherent (çocuklar toplamı = ebeveyn).
-- `tests/unit/engines/test_hierarchical.py` 6/6 yeşil (OLS varsayılanıyla).
-- **Kullanıcı kararı: formal pytest testleri + benchmark bu turda YAPILMADI.** Testler + full
-  benchmark, ADR 0047 gözden geçirildikten sonra bir sonraki turda.
+- **Formal pytest testleri (training içermeyen, hızlı):**
+  - `test_classical_forecasting.py`: `test_adr0047_is_low_frequency_panel` (M/Q/Y→True, W/D→False),
+    `test_adr0047_low_freq_gate_blocks_foundation_and_neural_ts` (aylık panel + `enabled != "on"` →
+    `run_foundation_ts_reports`/`run_neural_ts_reports` = `([], [])`, model yüklenmeden).
+  - `test_hierarchical.py::test_reconcile_coherence` parametrize `["ols", "wls_struct"]` — ikisi de
+    coherent (çocuklar toplamı = ebeveyn).
+  - `test_resolve.py::test_hierarchy_reconcile_method_default_ols` — varsayılan `ols`, `wls_struct`
+    kabul, `mint_shrink` reddedilir.
+  - `tourism_hier` loader smoke: 76 bölge / 27 zone / 7 eyalet.
+  - Etkilenen test dosyaları (config + hierarchical + classical): 27/27 yeşil.
+  - 'on' bypass yolu: mevcut `test_foundation.py::test_timesfm_reports_and_serving`
+    (`foundation_enabled='on'` + freq='MS' + rapor bekliyor) kapsıyor.
+- **Kullanıcı kararı: full regresyon suite + full benchmark bu turda YAPILMADI** (ağır/training).
+  ADR 0047 gözden geçirildikten sonra bir sonraki turda.
 
 ## Kapsam dışı
 
