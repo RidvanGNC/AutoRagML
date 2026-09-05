@@ -35,6 +35,19 @@ CLASSICAL_ENSEMBLE_KEY = "classical_ensemble"
 _SEASON_PARAM = "season_length"
 _FREQ_SEASON: dict[str, int] = {"H": 24, "D": 7, "B": 5, "W": 52, "M": 12, "Q": 4, "Y": 1, "A": 1}
 _N_JOBS = -1  # statsforecast serileri kendi executor'ıyla paralelleştirir (Windows'ta güvenli)
+
+# ADR 0047: aylık/çeyreklik/yıllık — foundation-TS & nöral-TS ön-eğitim korpusu bu frekanslardaki
+# M-competition benchmark'larını (M3/M4/tourism) içerir → rolling-origin OOF "ezberden" iyimser
+# (tourism: OOF 15.5 → gerçek holdout 24.2). Ayrıca literatür: bu frekanslarda klasik (ETS/ARIMA/
+# Theta) ≈ en iyi DL, generic ML daha kötü (Monash Archive Tourism Monthly: ETS MASE 1.28 ≈ DeepAR
+# 1.25; CatBoost 1.46). → varsayılan havuzdan çıkar, açık opt-in (`*_enabled="on"`) ile geri gelir.
+_LOW_FREQ_KEYS = frozenset("MQYA")
+
+
+def is_low_frequency_panel(profile: DataProfile) -> bool:
+    """Panel aylık/çeyreklik/yıllık mı (ADR 0047 — foundation-TS/nöral-TS yapısal kapısı)."""
+    freq = _resolve_freq(profile)
+    return bool(freq) and freq[0].upper() in _LOW_FREQ_KEYS
 _MAX_CV_WINDOWS = 3  # büyük panelde refit'li CV maliyeti — 3 pencere yeterli
 
 

@@ -32,6 +32,7 @@ from autoragml.engines.timeseries.classical import (
     _resolve_freq,
     _season_length,
     _to_nixtla,
+    is_low_frequency_panel,
 )
 from autoragml.logging import get_logger
 from autoragml.models.torch_env import configure_torch, resolve_device
@@ -184,6 +185,13 @@ def run_foundation_ts_reports(
     """Foundation-TS adaylar → rolling-origin zero-shot OOF → per-model rapor."""
     fnd = [c for c in candidates if is_foundation_ts(c)]
     if not fnd:
+        return [], []
+    if config.foundation_enabled != "on" and is_low_frequency_panel(profile):  # ADR 0047 yapısal kapı
+        logger.info(
+            "[foundation_ts] aylık/çeyreklik/yıllık panel — foundation-TS varsayılan havuzdan "
+            "çıkarıldı (ADR 0047: ön-eğitim korpusu M3/M4/tourism içerir → OOF kontamine; klasik ≈ "
+            "SOTA). Açmak: foundation_enabled='on'"
+        )
         return [], []
 
     ndf = _to_nixtla(frame, task)

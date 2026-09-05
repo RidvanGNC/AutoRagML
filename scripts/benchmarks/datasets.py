@@ -58,6 +58,7 @@ class BenchmarkDataset:
     horizon: int = 1
     season_length: int = 1
     primary_metric: str | None = None  # düşük-hacimli/intermittent panelde wmape (sMAPE patlar)
+    hierarchy_cols: list[str] | None = None  # ADR 0045/0047 — hiyerarşik reconciliation (group_col üstü)
 
     @property
     def is_timeseries(self) -> bool:
@@ -213,6 +214,34 @@ def _tourism_large() -> tuple[pd.DataFrame, str]:
     return _nixtla_long(y_df), "y"
 
 
+def _tourism_hier() -> tuple[pd.DataFrame, str]:
+    """Tourism — YALNIZ coğrafya ağacı: state → zone → region, tüm-amaç serileri (ADR 0047).
+
+    Grouped (coğrafya × seyahat amacı) yapının amaç boyutu şimdilik atlanır — `hierarchy_cols`
+    lineer bir ağaç. Bottom = 76 bölge (`<L><L><L>All`), üstü 27 zone / 7 eyalet / 1 toplam.
+    `hierarchy_cols=["state","zone"]` + `group_col="region"` → MinTrace reconciliation.
+    """
+    from datasetsforecast.hierarchical import HierarchicalData
+
+    y_df, _s_df, tags = HierarchicalData.load(directory=str(_TS_DATA_DIR), group="TourismLarge")
+    region_ids = {str(x) for x in tags["Country/State/Zone/Region"]}
+    df = y_df[y_df["unique_id"].astype(str).isin(region_ids)].copy()
+    df["unique_id"] = df["unique_id"].astype(str)
+    df["ds"] = pd.to_datetime(df["ds"])
+    df["y"] = pd.to_numeric(df["y"], errors="coerce")
+    df = df.dropna(subset=["y"])
+    if _FAST_MODE:
+        ids = np.sort(df["unique_id"].unique())
+        if len(ids) > _FAST_SERIES_CAP:
+            keep = np.random.default_rng(42).choice(ids, size=_FAST_SERIES_CAP, replace=False)
+            df = df[df["unique_id"].isin(set(keep))]
+    df["state"] = df["unique_id"].str[0]
+    df["zone"] = df["unique_id"].str[:2]
+    df = df.rename(columns={"unique_id": "region"})
+    out = df[["state", "zone", "region", "ds", "y"]].sort_values(["region", "ds"]).reset_index(drop=True)
+    return out, "y"
+
+
 def _m5_subset() -> tuple[pd.DataFrame, str]:
     from datasetsforecast.m5 import M5
 
@@ -295,6 +324,14 @@ DATASETS: list[BenchmarkDataset] = [
         notes="Avustralya turizm hiyerarşisi — aylık, düşük-hacimli seriler karışık (~555 seri).",
         tags=["forecasting", "panel", "monthly", "hierarchical"],
         time_col="ds", group_col="unique_id", horizon=12, season_length=12, primary_metric="wmape",
+    ),
+    BenchmarkDataset(
+        name="tourism_hier", loader=_tourism_hier, task_hint="forecasting", naive="seasonal_naive",
+        notes="Tourism coğrafya ağacı (76 bölge → 27 zone → 7 eyalet) — hierarchy_cols + MinTrace(ols) "
+        "reconciliation (ADR 0047). Amaç boyutu atlandı (grouped → lineer).",
+        tags=["forecasting", "panel", "monthly", "hierarchical"],
+        time_col="ds", group_col="region", horizon=12, season_length=12, primary_metric="wmape",
+        hierarchy_cols=["state", "zone"],
     ),
     BenchmarkDataset(
         name="m5_subset", loader=_m5_subset, task_hint="forecasting", naive="seasonal_naive",

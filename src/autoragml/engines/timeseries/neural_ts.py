@@ -28,6 +28,7 @@ from autoragml.engines.timeseries.classical import (
     _resolve_freq,
     _season_length,
     _to_nixtla,
+    is_low_frequency_panel,
 )
 from autoragml.logging import get_logger
 from autoragml.models.estimator import resolve_class_path
@@ -106,6 +107,12 @@ def run_neural_ts_reports(
     if not neural or not neural_ts_available():
         if neural:
             logger.warning("[neural_ts] neuralforecast yok — nöral-TS modelleri atlandı")
+        return [], []
+    if config.neural_enabled != "on" and is_low_frequency_panel(profile):  # ADR 0047 yapısal kapı
+        logger.info(
+            "[neural_ts] aylık/çeyreklik/yıllık panel — nöral-TS varsayılan havuzdan çıkarıldı "
+            "(ADR 0047: klasik ≈ SOTA, ML/DL kontaminasyon/kırılganlık). Açmak: neural_enabled='on'"
+        )
         return [], []
 
     from neuralforecast import NeuralForecast

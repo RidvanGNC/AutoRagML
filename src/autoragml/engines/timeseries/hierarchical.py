@@ -111,11 +111,15 @@ def build_hierarchy(
     )
 
 
-def reconcile(s_matrix: _Arr, y_hat: _Arr) -> _Arr:
-    """MinTrace(wls_struct) — yalnız `S`'den ağırlıklandırır (residual/OOF gerekmez, ADR 0045)."""
+def reconcile(s_matrix: _Arr, y_hat: _Arr, *, method: str = "ols") -> _Arr:
+    """MinTrace reconciliation — `ols` (varsayılan, ADR 0047) veya `wls_struct`.
+
+    İkisi de yalnız `S`'den hesaplanır (residual/OOF gerekmez). `ols` FPP3 tourism örneğinde
+    MinT'i geçmişti; `wls_struct` yapısal (düğüm-başı bottom-seri sayısı) ağırlık.
+    """
     from hierarchicalforecast.methods import MinTrace
 
-    mt = MinTrace(method="wls_struct").fit(S=s_matrix, y_hat=y_hat)
+    mt = MinTrace(method=method).fit(S=s_matrix, y_hat=y_hat)
     out: _Arr = mt.predict(S=s_matrix, y_hat=y_hat)["mean"]
     return out
 
@@ -143,12 +147,13 @@ class FittedHierarchicalForecaster:
         "_group_col",
         "_inner",
         "_node_order",
+        "_reconcile_method",
         "_s_matrix",
         "_target_col",
         "_time_col",
     )
 
-    def __init__(self, *, inner: Any, hspec: HierarchySpec) -> None:
+    def __init__(self, *, inner: Any, hspec: HierarchySpec, reconcile_method: str = "ols") -> None:
         self._inner = inner
         self._context = hspec.agg_frame[[hspec.group_col, hspec.time_col, hspec.target_col]].copy()
         self._s_matrix = hspec.s_matrix
@@ -158,6 +163,7 @@ class FittedHierarchicalForecaster:
         self._group_col = hspec.group_col
         self._time_col = hspec.time_col
         self._target_col = hspec.target_col
+        self._reconcile_method = reconcile_method  # ADR 0047: "ols" | "wls_struct"
 
     def predict(self, frame: pd.DataFrame) -> _Arr:
         req_dates = pd.to_datetime(frame[self._time_col])
@@ -182,7 +188,7 @@ class FittedHierarchicalForecaster:
         ).reindex(index=self._node_order, columns=target_dates)
         y_hat = np.nan_to_num(pivot.to_numpy(dtype=np.float64), nan=0.0)
 
-        reconciled = reconcile(self._s_matrix, y_hat)
+        reconciled = reconcile(self._s_matrix, y_hat, method=self._reconcile_method)
         rec_df = pd.DataFrame(reconciled, index=self._node_order, columns=target_dates)
 
         raw_to_bottom = {v: k for k, v in self._bottom_to_raw.items()}

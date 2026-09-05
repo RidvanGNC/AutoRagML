@@ -77,6 +77,8 @@ def run_forecasting(
         overrides["primary_metric"] = ds.primary_metric
     if forecast_reduction != "direct":
         overrides["forecast_reduction"] = forecast_reduction
+    if ds.hierarchy_cols:  # ADR 0045/0047 — hiyerarşik reconciliation
+        overrides["hierarchy_cols"] = ds.hierarchy_cols
     from scripts.benchmarks.run import BENCH_CATALOG
 
     model = AutoRagML(

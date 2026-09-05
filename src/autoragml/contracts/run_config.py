@@ -198,6 +198,9 @@ class RunConfig(Contract):
     # eklenir — tekrar yazılmaz). Örn. group_col="region" + hierarchy_cols=["state","zone"] →
     # hiyerarşi state → state/zone → state/zone/region. Otomatik algılama YOK — güvenli varsayılan.
     hierarchy_cols: list[str] | None = None
+    # ADR 0047: MinTrace yöntemi — `ols` (düz en-küçük-kareler; FPP3 tourism'de MinT'i geçti) veya
+    # `wls_struct` (yapısal ağırlık). İkisi de residual/OOF gerektirmez. `mint_shrink` → ADR 0045-B.
+    hierarchy_reconcile_method: Literal["ols", "wls_struct"] = "ols"
 
     @model_validator(mode="after")
     def _post_checks(self) -> RunConfig:

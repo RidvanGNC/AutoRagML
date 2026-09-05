@@ -58,6 +58,21 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
   yeniden kullanılır). **Ampirik sonuç:** tourism alt-kümesinde `auto`/pooled +7.3% (41s) vs
   per-series **-4.1%** (227s, bir seri şampiyonu baseline'a düştü) — global/kümeleme yaklaşımının
   (ADR 0028) izole per-seri refit'ten üstün olduğu doğrulandı; özellik var ama önerilmiyor.
+- **Foundation-TS/nöral-TS frekans kapısı** (ADR 0047, full-benchmark tourism gerilemesi + geniş
+  literatür taraması) — Chronos/TimesFM/Moirai ön-eğitim korpusu M3/M4/tourism Monthly/Quarterly/
+  Yearly benchmark'larını içeriyor ([2510.13654](https://arxiv.org/html/2510.13654v1): standart
+  benchmark'ların yalnız %7'si temiz; sızıntı "32 puan MAPE"). ADR 0042 post-hoc guard'ı tam ölçekte
+  yetersiz (SE veri arttıkça küçülüyor → eşik kolaylaşıyor). **Yapısal kapı:** `is_low_frequency_panel`
+  (freq ∈ {M,Q,Y,A}) iken `run_foundation_ts_reports`/`run_neural_ts_reports` erken dönüş — aday
+  havuza hiç girmez; `*_enabled="on"` ile açık opt-in bypass. Literatür: aylıkta klasik (ETS/ARIMA/
+  Theta) ≈ en iyi DL, generic ML daha kötü (Monash Archive Tourism Monthly ETS MASE 1.28 ≈ DeepAR 1.25).
+  Guard KALDIRILMADI — W/D/H frekanslarda foundation_ts hâlâ yarışıyor. TabPFN/TabICL (sentetik
+  ön-eğitim) etkilenmez.
+- **OLS reconciliation varsayılan** (ADR 0047) — `RunConfig.hierarchy_reconcile_method`
+  (`ols` | `wls_struct`, ikisi de residual gerektirmez). FPP3 §11: OLS tourism'de MinT'i geçmişti.
+- **`tourism_hier` benchmark dataset'i** (ADR 0047) — TourismLarge coğrafya ağacı (76 bölge → 27
+  zone → 7 eyalet), `hierarchy_cols=["state","zone"]` + MinTrace(ols). `BenchmarkDataset.hierarchy_cols`
+  + `run_forecasting` aktarımı. Grouped (coğrafya × amaç) yapının amaç boyutu atlandı (lineer).
 - **Model kataloğu genişlemesi:** akademik tarama (üstte) + TiDE dahil toplam model sayısı ~40+.
   `tests/conftest.py::_lean_catalog` (autouse) — ağır/yavaş modeller (EBM/NGBoost/SVR/AutoTBATS/
   TabICL) test suite'inde varsayılan kapalı, `@pytest.mark.full_catalog` ile açılır (üretimde açık).

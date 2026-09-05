@@ -201,8 +201,12 @@ class TimeSeriesCoreEngine:
         result = self._run_pooled(agg_frame, config, pruned_profile, task, tuner, horizon, season)
         result = result.model_copy(update={"messages": [*messages, *result.messages]})
 
+        rec_method = config.hierarchy_reconcile_method  # ADR 0047
+
         def _wrap(bundle: ModelBundle) -> ModelBundle:
-            wrapped = FittedHierarchicalForecaster(inner=bundle.pipeline, hspec=hspec)
+            wrapped = FittedHierarchicalForecaster(
+                inner=bundle.pipeline, hspec=hspec, reconcile_method=rec_method
+            )
             return bundle.model_copy(update={"pipeline": wrapped})
 
         inner_finalize = result.finalize
@@ -217,7 +221,11 @@ class TimeSeriesCoreEngine:
             )
             refit: ModelBundle = inner_finalize(full_hspec.agg_frame)
             return refit.model_copy(
-                update={"pipeline": FittedHierarchicalForecaster(inner=refit.pipeline, hspec=full_hspec)}
+                update={
+                    "pipeline": FittedHierarchicalForecaster(
+                        inner=refit.pipeline, hspec=full_hspec, reconcile_method=rec_method
+                    )
+                }
             )
 
         return result.model_copy(update={"champion": wrapped_champion, "finalize": _finalize_wrapped})
