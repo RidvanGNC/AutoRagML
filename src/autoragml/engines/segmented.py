@@ -153,7 +153,10 @@ def run_segmented(
         ids = set(seg.group_ids)
         seg_frame = frame[gcol.isin(ids)].reset_index(drop=True)
         n_series = seg_frame[gc].nunique()
-        if seg_frame.empty or n_series < 2:
+        # `per_series` (ADR 0046): segment TASARIM GEREĞİ tek seri — ≥2 şartı yalnız kümelenmiş
+        # segmentlere uygulanır (ADR 0028: tek-serilik "yetersiz kümeleme" anlamına gelirdi).
+        min_series = 1 if seg.source == "per_series" else 2
+        if seg_frame.empty or n_series < min_series:
             messages.append(f"segment '{seg.name}' atlandı (seri yok/yetersiz) — fallback'e katıldı")
             continue
         logger.info("[segmented] '%s': %d seri, %d satır", seg.name, n_series, len(seg_frame))

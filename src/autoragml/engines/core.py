@@ -63,10 +63,11 @@ def run_core_pipeline(
     tuner = tuner or resolve_tuner(config)
 
     plan = build_plan(profile, task, config)
-    if plan.structure == "per_group_champion" and not plan.segments:
+    if plan.structure in {"per_group_champion", "per_series_champion"} and not plan.segments:
         # segmentlenebilir tek anlamlı grup yok → pooled (planlayıcı kararı, degradasyon değil).
-        # Çok-segmentli durum TimeSeriesCoreEngine tarafından `run_segmented` ile ele alınır (ADR 0028).
-        msgs.append("per_group_champion: tek anlamlı segment — pooled ilerleniyor.")
+        # Çok-segmentli durum TimeSeriesCoreEngine tarafından `run_segmented` ile ele alınır
+        # (ADR 0028 kümelenmiş / ADR 0046 seri-başı).
+        msgs.append(f"{plan.structure}: tek anlamlı segment — pooled ilerleniyor.")
         logger.info("[engine] %s", msgs[-1])
 
     candidates = apply_model_hints(resolve_candidates(config, task), plan.model_hints)

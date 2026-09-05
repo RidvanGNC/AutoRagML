@@ -172,11 +172,13 @@ def _seasonal_diff_applicable(profile: DataProfile, task: TaskSpec) -> bool:
 
 def _resolve_structure(
     profile: DataProfile, task: TaskSpec, cfg: DynamicsConfig
-) -> Literal["pooled", "per_group_champion"]:
+) -> Literal["pooled", "per_group_champion", "per_series_champion"]:
     if cfg.structure == "pooled":
         return "pooled"
     if cfg.structure == "per_group_champion":
         return "per_group_champion"
+    if cfg.structure == "per_series_champion":  # ADR 0046 — yalnız açık bildirim, "auto" asla değil
+        return "per_series_champion"
     if task.task is not Task.FORECASTING or not task.group_col or profile.timeseries is None:
         return "pooled"
     series = profile.timeseries.per_series
@@ -259,6 +261,26 @@ def _resolve_segments(profile: DataProfile, task: TaskSpec, cfg: DynamicsConfig)
     ]
 
 
+def _resolve_segments_per_series(profile: DataProfile, task: TaskSpec) -> list[SegmentSpec]:
+    """`per_series_champion` (ADR 0046): kümeleme YOK — her seri kendi tek-üyeli segmenti.
+
+    `run_segmented` mekanizması (ADR 0028) aynen kullanılır; yalnız segment sayısı = seri sayısı.
+    Maliyet tavanı yok (açık opt-in — `neural_search` gibi kullanıcı süre maliyetini kabul eder),
+    yalnız bilgilendirici log.
+    """
+    ts = profile.timeseries
+    if ts is None or not task.group_col or not ts.per_series:
+        return []
+    logger.info(
+        "[dynamics] per_series_champion: %d seri — her biri tam nested-CV+HPO+ensembling koşacak",
+        len(ts.per_series),
+    )
+    return [
+        SegmentSpec(name=sp.group, group_ids=[sp.group], source="per_series")
+        for sp in ts.per_series
+    ]
+
+
 def _row_policies(profile: DataProfile, task: TaskSpec) -> list[str]:
     policies: list[str] = []
     ts = profile.timeseries
@@ -313,7 +335,12 @@ def build_plan(profile: DataProfile, task: TaskSpec, config: RunConfig) -> Adapt
     committed, notes = _committed_ops(profile, task, cfg)
     candidate = _candidate_ops(profile, task, cfg)
     structure = _resolve_structure(profile, task, cfg)
-    segments = _resolve_segments(profile, task, cfg) if structure == "per_group_champion" else []
+    if structure == "per_group_champion":
+        segments = _resolve_segments(profile, task, cfg)
+    elif structure == "per_series_champion":
+        segments = _resolve_segments_per_series(profile, task)
+    else:
+        segments = []
     row_policies = _row_policies(profile, task)
     regimes = _regimes(config)
 

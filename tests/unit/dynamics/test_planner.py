@@ -198,6 +198,39 @@ def test_no_segments_when_panel_not_sparse() -> None:
     assert plan.segments == []  # kesikli değil → pooled
 
 
+def test_per_series_champion_one_segment_per_series() -> None:
+    """ADR 0046: `structure="per_series_champion"` → kümeleme YOK, her seri kendi segmenti."""
+    weeks = pd.date_range("2024-01-01", periods=60, freq="W-MON")
+    rng = np.random.default_rng(22)
+    rows = [
+        {"g": g, "ds": wk, "y": 50 + 5 * np.sin(i / 52 * 6.28) + rng.normal(0, 2)}
+        for g in ["A", "B", "C", "D", "E"]
+        for i, wk in enumerate(weeks)
+    ]
+    plan, _, _ = _plan(
+        pd.DataFrame(rows), time_col="ds", group_col="g",
+        dynamics={"structure": "per_series_champion"},
+    )
+    assert plan.structure == "per_series_champion"
+    assert len(plan.segments) == 5
+    assert all(len(seg.group_ids) == 1 for seg in plan.segments)
+    assert {seg.group_ids[0] for seg in plan.segments} == {"A", "B", "C", "D", "E"}
+    assert all(seg.source == "per_series" for seg in plan.segments)
+
+
+def test_per_series_champion_never_auto_resolved() -> None:
+    """ADR 0046: `structure="auto"` hiçbir zaman per_series_champion'a çözülmez — yalnız açık bildirim."""
+    weeks = pd.date_range("2024-01-01", periods=120, freq="W-MON")
+    rng = np.random.default_rng(23)
+    rows = [
+        {"g": g, "ds": wk, "y": 100 + 10 * np.sin(i / 52 * 6.28) + rng.normal(0, 3)}
+        for g in ["A", "B", "C", "D"]
+        for i, wk in enumerate(weeks)
+    ]
+    plan, _, _ = _plan(pd.DataFrame(rows), time_col="ds", group_col="g")  # dynamics.structure="auto"
+    assert plan.structure != "per_series_champion"
+
+
 def test_seasonal_difference_default_for_trending_seasonal_panel() -> None:
     """ADR 0026: forecasting + mevsim ≥ horizon + trend/mevsim gücü → seasonal_difference varsayılan."""
     months = pd.date_range("2016-01-01", periods=84, freq="MS")

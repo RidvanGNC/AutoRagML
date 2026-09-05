@@ -231,6 +231,24 @@ def test_timeseries_engine_segmented_champion() -> None:
     assert not np.isnan(pred).any()
 
 
+def test_timeseries_engine_per_series_champion() -> None:
+    """ADR 0046: `structure="per_series_champion"` → her seri KENDİ tam nested-CV şampiyonu."""
+    df = _panel_df()  # 3 seri (A/B/C)
+    ds, cfg, profile, task = _prep(
+        df, time_col="ds", group_col="g", classical_forecasting=False,
+        dynamics={"structure": "per_series_champion"},
+    )
+    result = InProcessRunner().run(TimeSeriesCoreEngine(), ds, cfg, profile, task)
+    assert result.status in {EngineStatus.SUCCESS, EngineStatus.PARTIAL}
+    assert result.champion.metadata.model_key == "segmented"  # aynı serving mekanizması (ADR 0028)
+    segs = result.champion.metadata.adaptive_plan_summary["segments"]
+    assert len(segs) == 3  # her seri kendi segmenti
+    assert result.champion.metadata.params["source"] == "per_series"
+    pred = result.champion.pipeline.predict(df)
+    assert len(pred) == len(df)
+    assert not np.isnan(pred).any()
+
+
 def test_postprocess_embedded_in_champion_bundle() -> None:
     ds, cfg, profile, task = _prep(
         _tabular_df(), postprocess={"clip": {"lower": 5.0, "auto_nonneg": False}}

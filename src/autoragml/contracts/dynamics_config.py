@@ -16,7 +16,11 @@ class DynamicsConfig(Contract):
     """Veriye-özel strateji planlayıcısının ayarları."""
 
     # Yapısal seçim
-    structure: Literal["auto", "pooled", "per_group_champion"] = "auto"
+    # `per_series_champion` (ADR 0046): her seri KENDİ tek-üyeli segmenti — tam nested-CV+HPO+
+    # ensembling seri başına koşar. Yalnız açık bildirimde ("auto" hiçbir zaman buna çözülmez) —
+    # araştırma global+kümeleme (per_group_champion/segmented, ADR 0028) genelde bunu geçtiğini
+    # gösteriyor; deneysel karşılaştırma için var, varsayılan değil.
+    structure: Literal["auto", "pooled", "per_group_champion", "per_series_champion"] = "auto"
     per_group_min_series: int = Field(default=2, ge=1)
     per_group_max_series: int = Field(default=5000, ge=1)
     per_group_min_history_multiplier: float = Field(default=2.0, gt=0.0)
