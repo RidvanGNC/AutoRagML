@@ -40,6 +40,7 @@ _ENV_PACKAGES = (
     "ngboost",
     "timesfm",
     "tabicl",
+    "hierarchicalforecast",
 )
 
 

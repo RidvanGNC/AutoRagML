@@ -66,6 +66,38 @@ def test_target_kwarg_conflicts_with_overrides() -> None:
         resolve_run_config(target="a", overrides={"target": "b"})
 
 
+# --- hierarchy_cols (ADR 0045) -------------------------------------------------
+
+
+def test_hierarchy_cols_requires_group_col() -> None:
+    with pytest.raises(ConfigError, match="doğrulaması başarısız"):
+        resolve_run_config(target="y", overrides={"time_col": "ds", "hierarchy_cols": ["state"]})
+
+
+def test_hierarchy_cols_rejects_group_col_duplicate() -> None:
+    with pytest.raises(ConfigError, match="doğrulaması başarısız"):
+        resolve_run_config(
+            target="y",
+            overrides={"time_col": "ds", "group_col": "region", "hierarchy_cols": ["state", "region"]},
+        )
+
+
+def test_hierarchy_cols_rejects_repeated_cols() -> None:
+    with pytest.raises(ConfigError, match="doğrulaması başarısız"):
+        resolve_run_config(
+            target="y",
+            overrides={"time_col": "ds", "group_col": "region", "hierarchy_cols": ["state", "state"]},
+        )
+
+
+def test_hierarchy_cols_accepted_with_group_col() -> None:
+    res = resolve_run_config(
+        target="y",
+        overrides={"time_col": "ds", "group_col": "region", "hierarchy_cols": ["state", "zone"]},
+    )
+    assert res.config.hierarchy_cols == ["state", "zone"]
+
+
 def test_config_file_layer(tmp_path: object) -> None:
     cfg = tmp_path / "run.yaml"  # type: ignore[operator]
     cfg.write_text("seed: 7\nproject_name: proj\n", encoding="utf-8")

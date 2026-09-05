@@ -109,6 +109,42 @@ def test_timeseries_reduction_predict_interval_per_group() -> None:
     assert np.all((point >= lower - 1e-6) & (point <= upper + 1e-6))
 
 
+def _hierarchy_panel(n_periods: int = 30) -> pd.DataFrame:
+    """2 eyalet × 2 bölge — globally-unique bottom kimliği `region` (ADR 0045)."""
+    months = pd.date_range("2020-01-01", periods=n_periods, freq="MS")
+    rng = np.random.default_rng(3)
+    rows = []
+    for state in ["A", "B"]:
+        for zone in ["x", "y"]:
+            region = f"{state}-{zone}"
+            base = 60 + rng.normal(0, 5)
+            for i, m in enumerate(months):
+                y = max(0.0, base + 10 * np.sin(i / 12 * 6.28) + rng.normal(0, 2))
+                rows.append({"state": state, "zone": zone, "region": region, "ds": m, "y": y})
+    return pd.DataFrame(rows)
+
+
+def test_timeseries_engine_hierarchical_reconciliation() -> None:
+    """ADR 0045: hierarchy_cols → genişletilmiş panel + MinTrace(wls_struct) reconciliation."""
+    df = _hierarchy_panel()
+    ds, cfg, profile, task = _prep(
+        df, time_col="ds", group_col="region", classical_forecasting=False,
+        hierarchy_cols=["state", "zone"],
+    )
+    result = InProcessRunner().run(TimeSeriesCoreEngine(), ds, cfg, profile, task)
+    assert result.status in {EngineStatus.SUCCESS, EngineStatus.PARTIAL}
+    assert any("hierarchical" in m for m in result.messages)
+    assert type(result.champion.pipeline).__name__ == "FittedHierarchicalForecaster"
+
+    future = pd.DataFrame({
+        "region": ["A-x", "A-y", "B-x", "B-y"],
+        "ds": [df["ds"].max() + pd.DateOffset(months=1)] * 4,
+    })
+    preds = result.champion.pipeline.predict(future)
+    assert preds.shape == (4,)
+    assert not np.isnan(preds).any()
+
+
 def _monthly_panel() -> pd.DataFrame:
     """Küçük aylık panel — klasik CV hızlı (season 12, ~60 nokta)."""
     months = pd.date_range("2019-01-01", periods=60, freq="MS")

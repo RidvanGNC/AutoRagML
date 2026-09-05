@@ -18,13 +18,20 @@ from autoragml.analyzers.profiling import build_column_profiles
 from autoragml.contracts.data_profile import DataProfile
 from autoragml.contracts.dataset import Dataset
 from autoragml.contracts.engine_result import EngineResult
+from autoragml.contracts.model_bundle import ModelBundle
 from autoragml.contracts.run_config import RunConfig
 from autoragml.contracts.task_spec import TaskSpec
 from autoragml.dynamics import build_plan
 from autoragml.engines.core import run_core_pipeline
 from autoragml.engines.segmented import run_segmented
 from autoragml.engines.timeseries.classical import _resolve_freq, _season_length
+from autoragml.engines.timeseries.hierarchical import (
+    FittedHierarchicalForecaster,
+    build_hierarchy,
+    hierarchical_available,
+)
 from autoragml.engines.timeseries.reduction import build_reduction_features
+from autoragml.exceptions import EngineError
 from autoragml.io import materialize_frame
 from autoragml.logging import get_logger
 from autoragml.validators import Tuner
@@ -69,6 +76,9 @@ class TimeSeriesCoreEngine:
             task.horizon or (config.split_policy.horizon if config.split_policy else None) or 4
         )
         season = int(_season_length(profile, _resolve_freq(profile)))
+
+        if config.hierarchy_cols:  # ADR 0045 — segmentasyon/recursive ile birleşmez, hep pooled
+            return self._run_hierarchical(frame, config, profile, task, tuner, horizon, season)
 
         plan = build_plan(profile, task, config)
         if plan.segments:
@@ -153,3 +163,61 @@ class TimeSeriesCoreEngine:
             run_foundation_ts=config.foundation_enabled != "off",  # ADR 0033
             recursive=True, recursive_season=season,
         )
+
+    def _run_hierarchical(
+        self,
+        frame: pd.DataFrame,
+        config: RunConfig,
+        profile: DataProfile,
+        task: TaskSpec,
+        tuner: Tuner | None,
+        horizon: int,
+        season: int,
+    ) -> EngineResult:
+        """Hiyerarşik reconciliation (ADR 0045): bottom paneli agrega düğümlerle genişlet →
+        normal pooled akış (segmentasyon/recursive ile birleşmez, v1) → şampiyonu
+        `FittedHierarchicalForecaster` ile sar (MinTrace/wls_struct, serving-zamanında)."""
+        if not hierarchical_available():
+            msg = "hierarchy_cols verildi ama `hierarchicalforecast` kurulu değil ([hierarchical] extra)"
+            raise EngineError(msg)
+        assert config.hierarchy_cols and task.group_col  # RunConfig._post_checks garanti eder
+        hspec = build_hierarchy(
+            frame, hierarchy_cols=config.hierarchy_cols, group_col=task.group_col,
+            time_col=task.time_col or "ds", target_col=task.targets[0],
+        )
+        agg_frame = hspec.agg_frame
+        # `aggregate()` yalnız [group_col, time_col, target_col] tutar (diğer ham kolonlar düşer) —
+        # orijinal (agregasyon-öncesi) profil onları hâlâ feature sanıp committed_ops üretebilir;
+        # FeaturePipeline bu genişletilmiş panelde onları bulamaz → aday çöker. Profili budayarak
+        # yalnız gerçekten var olan 3 kolona daralt (ADR 0045).
+        keep = {task.group_col, task.time_col, task.targets[0]}
+        pruned_profile = profile.model_copy(
+            update={"columns": [c for c in profile.columns if c.name in keep]}
+        )
+        messages = [
+            f"hierarchical: {len(hspec.node_order)} düğüm ({len(hspec.bottom_ids)} bottom + "
+            f"{len(hspec.node_order) - len(hspec.bottom_ids)} agrega), MinTrace(wls_struct)"
+        ]
+        result = self._run_pooled(agg_frame, config, pruned_profile, task, tuner, horizon, season)
+        result = result.model_copy(update={"messages": [*messages, *result.messages]})
+
+        def _wrap(bundle: ModelBundle) -> ModelBundle:
+            wrapped = FittedHierarchicalForecaster(inner=bundle.pipeline, hspec=hspec)
+            return bundle.model_copy(update={"pipeline": wrapped})
+
+        inner_finalize = result.finalize
+        wrapped_champion = _wrap(result.champion)
+
+        def _finalize_wrapped(full_frame: pd.DataFrame) -> ModelBundle:
+            if inner_finalize is None:  # pragma: no cover - champion_refit_full=False ise
+                return wrapped_champion
+            full_hspec = build_hierarchy(
+                full_frame, hierarchy_cols=config.hierarchy_cols or [], group_col=hspec.group_col,
+                time_col=hspec.time_col, target_col=hspec.target_col,
+            )
+            refit: ModelBundle = inner_finalize(full_hspec.agg_frame)
+            return refit.model_copy(
+                update={"pipeline": FittedHierarchicalForecaster(inner=refit.pipeline, hspec=full_hspec)}
+            )
+
+        return result.model_copy(update={"champion": wrapped_champion, "finalize": _finalize_wrapped})

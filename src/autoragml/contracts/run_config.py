@@ -193,6 +193,12 @@ class RunConfig(Contract):
     foundation_ts_min_series: int = Field(default=1, ge=1)  # Chronos zero-shot: tek seri de olur
     foundation_ts_min_history_mult: float = Field(default=3.0, gt=0.0)  # seri ≥ mult · season · h
 
+    # --- hiyerarşik reconciliation (ADR 0045) — `[hierarchical]` extra; yalnız açık bildirimde ---
+    # En-agregeden en-alta kolonlar, `group_col`'un ÜSTÜ (group_col otomatik en-alt seviye olarak
+    # eklenir — tekrar yazılmaz). Örn. group_col="region" + hierarchy_cols=["state","zone"] →
+    # hiyerarşi state → state/zone → state/zone/region. Otomatik algılama YOK — güvenli varsayılan.
+    hierarchy_cols: list[str] | None = None
+
     @model_validator(mode="after")
     def _post_checks(self) -> RunConfig:
         if self.task_hint is Task.FORECASTING and self.time_col is None:
@@ -204,4 +210,14 @@ class RunConfig(Contract):
         if self.quantiles is not None and not all(0.0 < q < 1.0 for q in self.quantiles):
             msg = "quantiles değerleri (0, 1) aralığında olmalı"
             raise ValueError(msg)
+        if self.hierarchy_cols:
+            if self.group_col is None:
+                msg = "hierarchy_cols için group_col zorunlu (en-alt hiyerarşi seviyesi — ADR 0045)"
+                raise ValueError(msg)
+            if self.group_col in self.hierarchy_cols:
+                msg = "hierarchy_cols group_col'u içermemeli (otomatik en-alt seviye olarak eklenir)"
+                raise ValueError(msg)
+            if len(set(self.hierarchy_cols)) != len(self.hierarchy_cols):
+                msg = "hierarchy_cols yinelenen kolon içeremez"
+                raise ValueError(msg)
         return self
