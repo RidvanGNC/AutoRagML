@@ -8,6 +8,65 @@ release'te tarih + sürüm ile başlığa taşınır ve git tag atılır.
 
 ## [Unreleased]
 
+### Eklendi (v1.1 devamı — ADR 0033-0046)
+- **Foundation modeller** (ADR 0033) — `[foundation]`/`[foundation-ts]` extra: **TabPFN** (tablo,
+  in-context; lisans/token gerektirdiği için **varsayılan katalogda KAPALI**, kullanıcı kararı:
+  "ücretli kısımlar listede olmayacak") + **Chronos-Bolt** (zero-shot forecasting, auth'suz).
+  `models/foundation_tab.py` (`FoundationTabEstimator`) + `engines/timeseries/foundation_ts.py`
+  (rolling-origin zero-shot OOF, fit yok) + `models/foundation_gate.py` (ayrı kapı, nöralden bağımsız).
+- **L2 stacking** (ADR 0034) — saf stacking (yalnız L1 OOF matrisi Z, orijinal öznitelik yok);
+  muhafazakâr `auto` (n_rows≥2000 + ≥4 çeşitli L1 ailesi); L2 OOF en iyi L1'i geçmiyorsa önerilmez.
+  `ensembling/stacking.py` + `engines/stack_pipeline.py`.
+- **Seçim temizliği** (ADR 0035) — `champion_refit_full` (holdout skorundan sonra train+holdout'ta
+  yeniden fit, `EngineResult.finalize` closure) + klasik+reduction ortak forecasting GES
+  (`engines/timeseries/joint_ensemble.py`) + aile-arası tie-break robustluğu.
+- **Sınıflandırma GES + bagging** (ADR 0036) — olasılık-OOF tabanlı Caruana ensemble
+  (`greedy_selection_proba`), bagged olasılık ortalaması + argmax; `predict_proba` sunmayan
+  estimator'larda (RidgeClassifier vb.) bagging otomatik kapanır.
+- **Açıklanabilirlik** (ADR 0037) — `RunResult.explain()`/`AutoRagML.explain()`: SHAP (kuruluysa,
+  ağaç/linear) + model-agnostik permutation fallback (`explain/attribution.py`).
+- **Panel holdout + seçim robustluğu** (ADR 0038, m3/m5 benchmark bulgusundan) — kararsız-CV
+  filtresi (`_within_one_se`: `SE > 2·band` olan aday banttan dışlanır) + per-seri son-h holdout
+  (heterojen panelde global cutoff yanlış hizalanıyordu). m3 champion sMAPE 44.7→16.3 düzeltmesi.
+- **Forecasting seçim ince ayarı** (ADR 0039) — kesikli-baskın panelde yüzde-metrik promotion
+  tavanı atlanır; 1-SE basitlik ikamesi en fazla **%3** göreli maliyete izin verir (bariz-daha-iyi
+  foundation/nöral OOF feda edilmez).
+- **Akademik model taraması** (ADR 0040, TabArena/AMLB/GIFT-Eval araştırması) — klasik forecasting:
+  `auto_ces`/`auto_tbats`(opt-in)/`dynamic_theta`/`imapa`/`adida`. Tablo: **EBM** (glassbox GAM),
+  **KNN**, SVR/SVC (opt-in), **NGBoost** (olasılıksal boosting). **TabICL** — TabPFN'e auth'suz
+  in-context alternatif (clf+reg+forecasting-reduction).
+- **TimesFM foundation-TS backend** (ADR 0041) — `foundation_ts.py` backend-agnostik hale getirildi
+  (`_ForecastBackend` protokolü); Chronos'a ek olarak Google TimesFM 2.5 (zero-shot, auth'suz).
+- **Foundation-TS OOF güven guard'ı** (ADR 0042, dev-benchmark bulgusundan) — Chronos/TimesFM
+  ön-eğitim korpusu M3/M4/tourism benchmark'larını içerdiğinden rolling-origin OOF "ezberden"
+  iyimser olabiliyordu (m3: OOF 8 → gerçek holdout 17). `_MAX_CV_WINDOWS` 2→4 + ince-kanıt/
+  kontamine-OOF marj guard'ı (`foundation_ts`/`neural_ts` OOF-en-iyisi, güvenilir (≥3 fold) en iyi
+  rakibi `max(SE)` marjıyla geçemezse düşürülür). tourism: -18.3% NO_IMPROVEMENT → +19.5% SUCCESS.
+- **TiDE forecasting modeli** (ADR 0043) — `neuralforecast.models.TiDE`; kesikli panellerde büyük
+  mimarilerden daha isabetli + ucuz olduğunu gösteren güncel araştırmadan (zaten kurulu bağımlılık).
+- **Split-conformal `predict_interval()`** (ADR 0044) — `postprocessors/conformal.py`: kalibrasyon
+  = mevcut şampiyon OOF'u (ek split/fit gerekmez), finite-sample düzeltmeli mutlak-residual kantili;
+  `coverage` çağrı-zamanında override edilebilir. `per_group=True` (küçük örneklem → global'e düşer).
+  Kapsam: `FittedModelPipeline`/`FittedEnsemblePipeline` (tablo + reduction-forecasting + bagged/GES).
+  `RunResult`/`AutoRagML`/`LoadedChampion.predict_interval(data, coverage=None) -> (lower, upper)`.
+- **Hiyerarşik reconciliation** (ADR 0045) — `RunConfig.hierarchy_cols`; `hierarchicalforecast.
+  aggregate()` ile bottom panel üst düğümlerle genişletilir → **mevcut** `TimeSeriesCoreEngine`
+  akışından geçer (yeni motor yok) → `MinTrace(wls_struct)` served tahminleri tutarlı hale getirir
+  (çocuklar toplamı = ebeveyn). `engines/timeseries/hierarchical.py`.
+- **Per-series şampiyon deneyi** (ADR 0046, deneysel — VARSAYILAN DEĞİL) — `structure=
+  "per_series_champion"`: her seri kendi tek-üyeli segmenti (mevcut `run_segmented` mekanizması
+  yeniden kullanılır). **Ampirik sonuç:** tourism alt-kümesinde `auto`/pooled +7.3% (41s) vs
+  per-series **-4.1%** (227s, bir seri şampiyonu baseline'a düştü) — global/kümeleme yaklaşımının
+  (ADR 0028) izole per-seri refit'ten üstün olduğu doğrulandı; özellik var ama önerilmiyor.
+- **Model kataloğu genişlemesi:** akademik tarama (üstte) + TiDE dahil toplam model sayısı ~40+.
+  `tests/conftest.py::_lean_catalog` (autouse) — ağır/yavaş modeller (EBM/NGBoost/SVR/AutoTBATS/
+  TabICL) test suite'inde varsayılan kapalı, `@pytest.mark.full_catalog` ile açılır (üretimde açık).
+- **Benchmark harness genişlemesi** — 6→23 dataset (tablo 16, forecasting 7: M3/M4×3/M5/Tourism/ETT);
+  `--profile dev` (12 dataset + sıkı veri capleri, ~90-120dk hızlı geliştirme sinyali) vs tam profil
+  (23 dataset, ~16sa release doğrulaması).
+- **Lisans:** proje **Apache License 2.0** altında yayımlanıyor (ticari kullanım serbest, telif/
+  lisans bildirimleri korunmalı) — bkz. `LICENSE` + `NOTICE`.
+
 ### Eklendi (v1.1)
 - **Nöral forecasting katmanı** (ADR 0032) — `[neural-ts]` extra: `neuralforecast`. Native panel
   yolu (ADR 0023 klasik deseni): `NeuralForecast.cross_validation` → OOF, `.fit`/`.predict` → serving.

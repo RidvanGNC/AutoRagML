@@ -7,9 +7,15 @@ name = "autoragml"
 description = "Modalite-agnostik, deterministik AutoML çekirdeği (v1: tablo + zaman serisi). RAG/agent katmanı v2."
 readme = "README.md"
 requires-python = ">=3.12"  # PEP 695, enum.StrEnum, modern stubs
-license = { text = "TBD" }  # proje lisansı kesinleşmedi — bkz. docs/architecture/decisions
-authors = [{ name = "AutoRagML" }]
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "RidvanGNC", email = "ridvangonca02@gmail.com" }]
 keywords = ["automl", "forecasting", "time-series", "tabular", "machine-learning"]
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
 dynamic = ["version"]
 
 # Çekirdek: torch YOK, hafif, 3 OS'te sorunsuz.
